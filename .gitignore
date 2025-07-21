@@ -1,0 +1,69 @@
+# ===================================================================
+# ==         Root .gitignore for Flutter + Python Monorepo         ==
+# ===================================================================
+
+# General purpose ignores
+.DS_Store
+*.log
+*.lock
+*.swp
+*.swo
+
+# IDE and Editor folders
+# These are common to both projects
+.idea/
+.vscode/
+*.iml
+
+# -------------------------------------
+# --- Flutter Specific Ignores ---
+# Paths are now relative to the root, so we prepend the folder name.
+# -------------------------------------
+expense_tracker/.dart_tool/
+expense_tracker/.flutter-plugins
+expense_tracker/.flutter-plugins-dependencies
+expense_tracker/.packages
+expense_tracker/.pub-cache/
+expense_tracker/.pub/
+expense_tracker/build/
+expense_tracker/lib/firebase_options.dart
+
+# Flutter iOS
+expense_tracker/ios/Pods/
+expense_tracker/ios/Flutter/
+expense_tracker/ios/Runner.xcworkspace/
+expense_tracker/ios/Runner.xcodeproj/project.xcworkspace/
+expense_tracker/ios/Runner.xcodeproj/xcuserdata/
+
+# Flutter Android
+expense_tracker/android/app/build/
+expense_tracker/android/.gradle/
+expense_tracker/android/local.properties
+
+# Keystores
+*.keystore
+*.jks
+
+
+# -------------------------------------
+# --- Python Specific Ignores ---
+# Paths are now relative to the root.
+# -------------------------------------
+expense_tracker_backend/__pycache__/
+expense_tracker_backend/venv/
+expense_tracker_backend/env/
+expense_tracker_backend/.venv/
+expense_tracker_backend/.env/
+expense_tracker_backend/*.pyc
+expense_tracker_backend/*.pyo
+expense_tracker_backend/*.pyd
+
+# Optional: Ignore saved models and large data files
+expense_tracker_backend/*.pkl
+# expense_tracker_backend/sample_data.csv
+
+# Python packaging artifacts
+expense_tracker_backend/dist/
+expense_tracker_backend/build/
+expense_tracker_backend/*.egg-info/
+expense_tracker_backend/gcp-vision-credentials.json
