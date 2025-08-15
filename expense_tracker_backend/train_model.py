@@ -14,29 +14,30 @@ except FileNotFoundError:
     print("Error: 'sample_data.csv' not found. Make sure it's in the same directory.")
     exit()
 
-# 2. Define Features (the 'text' column) and Target (the 'category' column)
+# 2. Define Features (X) and Target (y)
 X = data['text']
 y = data['category']
 
 # 3. Create a Scikit-learn Pipeline
-# A pipeline makes our workflow clean and reproducible.
-# It chains a vectorizer (to turn text into numbers) and a classifier.
 text_classifier = Pipeline([
-    # TfidfVectorizer: Converts text into meaningful numerical vectors.
-    ('tfidf', TfidfVectorizer(stop_words='english')),
+    # --- THIS IS THE KEY MODIFICATION ---
+    # The `ngram_range=(1, 3)` parameter tells the model to look at
+    # single words, pairs of words (bigrams), and triplets of words (trigrams).
+    # This helps it understand context, like "mobile phone" being one concept.
+    ('tfidf', TfidfVectorizer(stop_words='english', ngram_range=(1, 3))),
+    # ------------------------------------
     
-    # SGDClassifier: A fast and efficient classification algorithm, great for text.
+    # The classifier itself remains the same.
     ('clf', SGDClassifier(loss='hinge', penalty='l2',
                            alpha=1e-3, random_state=42,
                            max_iter=10, tol=None)),
 ])
 
-# 4. Train the model on our entire dataset
-print("Training the category classification model...")
+# 4. Train the new, smarter model on our data
+print("Training the category classification model with n-grams...")
 text_classifier.fit(X, y)
 print("Training complete.")
 
-# 5. Save the entire pipeline (vectorizer + classifier) to a single file.
-# This file is our final, trained model.
+# 5. Save the new model file. This will overwrite the old one.
 joblib.dump(text_classifier, 'category_classifier.pkl')
-print("Model successfully saved to 'category_classifier.pkl'")
+print("New, smarter model successfully saved to 'category_classifier.pkl'")

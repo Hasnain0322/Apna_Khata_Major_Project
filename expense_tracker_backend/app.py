@@ -3,111 +3,81 @@ import re
 import joblib
 from flask import Flask, request, jsonify
 from google.cloud import vision
+from google.oauth2 import service_account
 
 # --- 1. INITIAL SETUP ---
 app = Flask(__name__)
 
 # --- 2. LOAD MODELS & CLIENTS ON STARTUP ---
-
-# Load your custom category classification model
 try:
     category_classifier = joblib.load('category_classifier.pkl')
-    print("✅ Category classification model loaded successfully .!")
+    print("✅ Category classification model loaded.")
 except FileNotFoundError:
     print("❌ ERROR: 'category_classifier.pkl' not found. Please run train_model.py first.")
     exit()
 
-# Set up Google Cloud Vision client
-# This requires the 'gcp-vision-credentials.json' file in the same directory.
 try:
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "gcp-vision-credentials.json"
-    vision_client = vision.ImageAnnotatorClient()
-    print("✅ Google Cloud Vision client initialized successfully.")
+    credentials = service_account.Credentials.from_service_account_file("gcp-vision-credentials.json")
+    vision_client = vision.ImageAnnotatorClient(credentials=credentials)
+    print("✅ Google Cloud Vision client initialized.")
 except Exception as e:
-    print(f"❌ ERROR: Could not initialize Google Vision client: {e}")
-    print("   Please ensure 'gcp-vision-credentials.json' is present, valid, and that you have enabled the Vision API and billing.")
-    exit()
+    print(f"❌ ERROR: Could not initialize Google Vision client: {e}"); exit()
 
 
 # --- 3. HELPER FUNCTIONS ---
+def find_category_by_keyword(text):
+    text_lower = text.lower()
+    keyword_map = {
+        'Food': ['pizza', 'groceries', 'restaurant', 'lunch', 'dinner', 'coffee', 'snacks', 'zomato', 'swiggy', 'biryani', 'burger', 'cafe', 'bakery', 'sweets'],
+        'Shopping': ['mobile phone', 'shirt', 'jeans', 'shoes', 'book', 'laptop', 'teddy bear', 'amazon', 'flipkart', 'myntra', 'nykaa', 'toy', 'outfit', 'dress', 'apparel', 'electronics'],
+        'Entertainment': ['movie', 'netflix', 'spotify', 'concert', 'bookmyshow', 'hotstar', 'prime video'],
+        'Transport': ['uber', 'taxi', 'bus fare', 'flight', 'fuel', 'metro', 'ola', 'rapido', 'petrol', 'diesel'],
+        'Health': ['medicine', 'doctor', 'pharmacy', 'apollo', 'pharmeasy', 'netmeds', 'hospital', 'clinic', 'diagnostics'],
+        'Utilities': ['electricity bill', 'internet bill', 'phone recharge', 'rent', 'broadband', 'airtel', 'jio', 'vi', 'vodafone', 'water bill', 'invoice']
+    }
+    for category, keywords in keyword_map.items():
+        if any(keyword in text_lower for keyword in keywords): return category
+    return None
 
 def extract_amount(text):
-    """Uses regex to find the first number (integer or float) in a given text string."""
-    # This regex looks for digits, optionally followed by a dot and more digits.
-    numbers = re.findall(r'\d+\.?\d*', text)
-    if numbers:
-        return float(numbers[0])
+    numbers = re.findall(r'[\d,]+\.\d{2}|[\d,]+', text)
+    if numbers: return float(numbers[0].replace(',', ''))
     return None
 
 def extract_item(text, amount):
-    """A simple heuristic to guess the item name by cleaning up the input text."""
-    # Convert amount to string to remove it from the text
     if amount:
-        amount_str = str(int(amount) if amount.is_integer() else amount)
+        amount_str = str(int(amount) if amount % 1 == 0 else amount)
         text = text.lower().replace(amount_str, '')
-
-    # Remove common stop words and currency units
-    stop_words = [
-        'bought', 'paid', 'for', 'a', 'an', 'the', 'rs', 'rupees', 'was', 'of',
-        'my', 'recharged', 'new', 'got', 'purchase', 'cost'
-    ]
-    querywords = text.split()
-    
-    # Rebuild the string without the stop words
-    resultwords  = [word for word in querywords if word.lower() not in stop_words]
-    item = ' '.join(resultwords).strip().title() # Capitalize first letters of each word
-    
-    return item if item else "Unknown Item"
+    stop_words = ['bought', 'paid', 'for', 'a', 'an', 'the', 'rs', 'rupees', 'was', 'of', 'my', 'recharged', 'new', 'got', 'purchase', 'cost', 'from', 'on']
+    querywords = text.split(); resultwords = [word for word in querywords if word.lower() not in stop_words]
+    item = ' '.join(resultwords).strip().title(); return item if item else "Unknown Item"
 
 def parse_receipt_text(text):
-    """
-    Analyzes a large block of OCR text from a receipt to find the total,
-    a likely category, and a vendor name.
-    """
-    lines = text.lower().split('\n')
-    amount = None
-    category = 'Shopping'  # A safe default
-    item = "Scanned Receipt" # A safe default
-
-    # 1. Find the total amount (most important part)
-    total_keywords = ['total', 'amount due', 'to pay', 'grand total', 'balance', 'net amount']
+    lines = text.lower().split('\n'); amount, category, item = None, None, "Scanned Receipt"
+    high_priority_keywords = ['grand total', 'total due', 'amount paid', 'balance']; low_priority_keywords = ['total', 'subtotal', 'amount']
+    found_amounts = []
     for line in reversed(lines):
-        for keyword in total_keywords:
-            if keyword in line:
-                found_amount = extract_amount(line)
-                if found_amount:
-                    amount = found_amount
-                    break 
-        if amount is not None:
-            break
-
-    # Fallback: If no keyword found, guess the largest number on the receipt is the total.
+        if any(keyword in line for keyword in high_priority_keywords):
+            found_amount = extract_amount(line)
+            if found_amount: amount = found_amount; break
     if amount is None:
-        all_numbers = re.findall(r'\d+\.?\d*', text)
-        if all_numbers:
-            amount = max([float(n) for n in all_numbers])
-
-    # 2. Guess the category based on keywords found anywhere in the receipt text.
-    category_map = {
-        'Food': ['grocery', 'market', 'foods', 'restaurant', 'cafe', 'kitchen', 'sweets', 'bakery'],
-        'Health': ['pharmacy', 'medical', 'clinic', 'hospital', 'health', 'diagnostics'],
-        'Utilities': ['telecom', 'internet', 'bill', 'invoice', 'electricity', 'water'],
-        'Shopping': ['fashion', 'store', 'mall', 'boutique', 'electronics', 'apparel', 'lifestyle']
-    }
-    for cat, keywords in category_map.items():
-        for keyword in keywords:
-            if keyword in text.lower():
-                category = cat
-                break
-        if category != 'Shopping':
-            break
-            
-    # 3. Guess the item/vendor name (often one of the first few non-empty lines).
+        for line in reversed(lines):
+            if any(keyword in line for keyword in low_priority_keywords):
+                found_amount = extract_amount(line)
+                if found_amount: found_amounts.append(found_amount)
+        if found_amounts: amount = min(found_amounts)
+    if amount is None:
+        all_numbers_str = re.findall(r'[\d,]+\.?\d*', text)
+        if all_numbers_str:
+            valid_numbers = [float(n.replace(',', '')) for n in all_numbers_str if n]
+            if valid_numbers: amount = max(valid_numbers)
+    category = find_category_by_keyword(text)
     for line in lines:
-        if line.strip() and len(line.strip()) > 2:
-            item = line.strip().title()
-            break
-
+        clean_line = line.strip()
+        if len(clean_line) > 2 and not clean_line.replace('.', '', 1).isdigit(): item = clean_line.title(); break
+    if category is None:
+        if item != "Scanned Receipt": prediction = category_classifier.predict([item]); category = str(prediction[0])
+        else: category = 'Other'
     return {'item': item, 'amount': amount, 'category': category}
 
 
@@ -115,73 +85,58 @@ def parse_receipt_text(text):
 
 @app.route('/process', methods=['POST'])
 def process_text():
-    """Endpoint for simple text-based expenses."""
     print("\n--- Request received at /process endpoint! ---")
-    data = request.get_json()
-    if not data or 'text' not in data:
-        return jsonify({'error': 'Invalid input. Please provide a "text" field.'}), 400
-
-    input_text = data['text']
-    
-    predicted_category = category_classifier.predict([input_text])[0]
-    amount = extract_amount(input_text)
-    if amount is None:
-        return jsonify({'error': 'Could not determine the amount from the text.'}), 400
+    try:
+        data = request.get_json()
+        if not data or 'text' not in data: return jsonify({'error': 'Invalid input: Missing "text" field.'}), 400
+        input_text = data['text']
         
-    item = extract_item(input_text, amount)
+        amount = extract_amount(input_text)
+        if amount is None: return jsonify({'error': 'Could not determine the amount from the text.'}), 400
 
-    response = {
-        'item': item,
-        'amount': amount,
-        'category': predicted_category
-    }
-    print(f"✅ Processed text successfully: {response}")
-    return jsonify(response)
+        predicted_category = find_category_by_keyword(input_text)
+        if predicted_category is None:
+            print("No keyword found, using ML model for prediction...")
+            # THE CRITICAL FIX IS HERE: Convert the NumPy type to a standard Python string
+            prediction_result = category_classifier.predict([input_text])
+            predicted_category = str(prediction_result[0])
+        else:
+            print(f"Found high-confidence keyword, category set to: {predicted_category}")
 
+        item = extract_item(input_text, amount)
+        response = {'item': item, 'amount': amount, 'category': predicted_category}
+        print(f"✅ Processed text successfully: {response}")
+        return jsonify(response)
+    except Exception as e:
+        print(f"❌ An error occurred in /process: {e}")
+        return jsonify({'error': 'An internal server error occurred.'}), 500
 
 @app.route('/process-image-receipt', methods=['POST'])
 def process_image_receipt():
-    """Endpoint for processing uploaded receipt images."""
     print("\n--- Request received at /process-image-receipt endpoint! ---")
-    if 'receipt' not in request.files:
-        return jsonify({'error': 'No image file found in request (expected key "receipt").'}), 400
-    
+    if 'receipt' not in request.files: return jsonify({'error': 'No image file found.'}), 400
     file = request.files['receipt']
-    
-    if file.filename == '':
-        return jsonify({'error': 'No image file selected.'}), 400
-
     try:
-        print("Received image, sending to Google Cloud Vision for OCR...")
         image_content = file.read()
         image = vision.Image(content=image_content)
-        
         response = vision_client.text_detection(image=image)
-        
-        if response.error.message:
-            # This will catch the BILLING_DISABLED error
-            raise Exception(response.error.message)
-
+        if response.error.message: raise Exception(response.error.message)
         if response.text_annotations:
             full_ocr_text = response.text_annotations[0].description
-            print("✅ Google Vision OCR successful. Analyzing extracted text...")
-            
+            print("✅ Google Vision OCR successful. Analyzing with smart parser...")
             processed_data = parse_receipt_text(full_ocr_text)
-            
-            if processed_data.get('amount') is None:
-                return jsonify({'error': 'Could not determine total from receipt text.'}), 400
-            
+            if processed_data.get('amount') is None: return jsonify({'error': 'Could not determine total from receipt text.'}), 400
             print(f"✅ Processed image successfully: {processed_data}")
             return jsonify(processed_data)
         else:
-            return jsonify({'error': 'No text detected in the image by Google Vision.'}), 400
-
+            return jsonify({'error': 'No text detected in the image.'}), 400
     except Exception as e:
         print(f"❌ An error occurred during image processing: {e}")
-        return jsonify({'error': 'An internal error occurred while processing the image.'}), 500
-
+        return jsonify({'error': 'An internal error occurred.'}), 500
 
 # --- 5. RUN THE APP ---
 if __name__ == '__main__':
-    # Listens on all network interfaces, making it accessible from the emulator/device
     app.run(host='0.0.0.0', port=5000, debug=True)
+
+
+    

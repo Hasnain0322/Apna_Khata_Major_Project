@@ -6,7 +6,7 @@ import 'package:http_parser/http_parser.dart';
 class AiService {
   // IMPORTANT: This is the hardcoded IP address of your computer on your local Wi-Fi network.
   // You must update this value every time your computer's IP address changes.
-  final String _baseUrl = 'http://192.168.0.103:5000'; // <-- UPDATE THIS AS NEEDED
+  final String _baseUrl = 'http://192.168.31.56:5000'; // <-- UPDATE THIS AS NEEDED
 
   /// Sends a short, single sentence to the Python backend for ML-based processing.
   /// Used for quick text entry and voice commands.
@@ -46,6 +46,7 @@ class AiService {
         'POST',
         Uri.parse('$_baseUrl/process-image-receipt') // <-- Calls the NEW image endpoint
       );
+
 
       // 2. Attach the image file to the request.
       request.files.add(
