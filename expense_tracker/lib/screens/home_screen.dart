@@ -1,80 +1,168 @@
-import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+import 'dart:async';
+import 'package:expense_tracker/models/expense_model.dart';
+import 'package:expense_tracker/models/user_profile_model.dart';
+import 'package:expense_tracker/screens/add_expense_screen.dart';
+import 'package:expense_tracker/screens/expenses_screen.dart';
+import 'package:expense_tracker/screens/profile_screen.dart';
+import 'package:expense_tracker/screens/reports_screen.dart';
 import 'package:expense_tracker/services/ai_service.dart';
 import 'package:expense_tracker/services/auth_service.dart';
-import 'package:expense_tracker/screens/add_expense_screen.dart';
+import 'package:expense_tracker/services/firestore_service.dart';
+import 'package:expense_tracker/utils/app_theme.dart';
+import 'package:expense_tracker/widgets/balance_card.dart';
+import 'package:expense_tracker/widgets/fade-page-route.dart';
+import 'package:expense_tracker/widgets/transaction_tile.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
-
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final AuthService _auth = AuthService();
-  final AiService _aiService = AiService(); // Add an instance of our AI service
+  final _auth = FirebaseAuth.instance;
+  final _authService = AuthService();
+  final _aiService = AiService();
+  final _firestoreService = FirestoreService();
 
-  // --- NEW, UPDATED _scanReceipt FUNCTION ---
-  /// This function now handles uploading the image directly to the backend.
-  Future<void> _scanReceipt() async {
-    final ImagePicker picker = ImagePicker();
-    // Ask user to pick an image from the camera.
-    final XFile? image = await picker.pickImage(source: ImageSource.camera);
+  // --- Speech-to-Text State Variables ---
+  final SpeechToText _speechToText = SpeechToText();
+  bool _speechEnabled = false;
 
-    if (image == null) return; // User cancelled
-    if (!mounted) return;
+  @override
+  void initState() {
+    super.initState();
+    _initSpeech();
+  }
 
-    // Show a more descriptive loading message
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Uploading and analyzing receipt...')),
-    );
-
+  /// Initialize the speech recognition service once.
+  void _initSpeech() async {
     try {
-      // Call the new service method that uploads the image file path
-      final result = await _aiService.analyzeReceiptImage(image.path);
-
-      if (!mounted) return;
-      // Hide the "uploading" snackbar before showing the result
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-
-      if (result != null) {
-        // We have the final structured data from the backend!
-        // Navigate to AddExpenseScreen and pass this data directly.
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => AddExpenseScreen(initialData: result),
-          ),
-        );
-      } else {
-        // The backend returned an error or null
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not analyze receipt. Please try again.')),
-        );
-      }
+      _speechEnabled = await _speechToText.initialize();
     } catch (e) {
-      print("An error occurred in the scan receipt flow: $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('An unexpected error occurred.')),
-        );
-      }
+      print("Speech recognition failed to initialize: $e");
+    }
+    if (mounted) {
+      setState(() {});
     }
   }
 
+  // --- THIS IS THE NEW, CORRECTED, AND COMPATIBLE VOICE LOGIC ---
+  Future<void> _handleVoiceInput() async {
+    if (!_speechEnabled) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Speech recognition not available.')));
+      return;
+    }
 
-  // --- Helper method to show the logout confirmation dialog ---
-  Future<void> _showLogoutDialog(BuildContext context) async {
-    return showDialog<void>(
+    final completer = Completer<String?>();
+    String recognizedWords = "";
+
+    // Start listening right away.
+    _speechToText.listen(
+      onResult: (result) {
+        // This is called continuously. We update a variable with the latest text.
+        recognizedWords = result.recognizedWords;
+        
+        // When the speech engine is confident the user is done, it sets this flag.
+        if (result.finalResult) {
+          // If our completer hasn't been finished yet, finish it with the final text.
+          if (!completer.isCompleted) {
+            completer.complete(recognizedWords);
+          }
+        }
+      },
+      // These help the engine know when to stop automatically.
+      listenFor: const Duration(seconds: 15),
+      pauseFor: const Duration(seconds: 3),
+    );
+
+    // Show the dialog. It will display the live recognized words.
+    await showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
+      builder: (dialogContext) {
+        return ListeningDialog(
+          speechToText: _speechToText,
+          // This future will complete when the speech is final, closing the dialog.
+          resultFuture: completer.future,
+          onCancel: () {
+            // If the user cancels, stop listening and complete with null.
+            _speechToText.stop();
+            if (!completer.isCompleted) {
+              completer.complete(null);
+            }
+            Navigator.of(dialogContext).pop();
+          },
+        );
+      },
+    );
+
+    // After the dialog closes, get the final result from the completer.
+    final finalResult = await completer.future;
+    
+    if (finalResult != null && finalResult.isNotEmpty) {
+      Navigator.of(context).push(
+        FadePageRoute(page: AddExpenseScreen(initialText: finalResult)),
+      );
+    }
+  }
+  // --- END OF NEW LOGIC ---
+
+  Future<void> _scanReceipt() async {
+    final picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.camera);
+    if (image == null || !mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: const Text('Uploading and analyzing receipt...'),
+          backgroundColor: Theme.of(context).colorScheme.onBackground),
+    );
+    final result = await _aiService.analyzeReceiptImage(image.path);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    if (result != null) {
+      Navigator.of(context)
+          .push(FadePageRoute(page: AddExpenseScreen(initialData: result)));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content:
+                const Text('Could not process your request. Please try again.'),
+            backgroundColor: Theme.of(context).colorScheme.error),
+      );
+    }
+  }
+
+  String _greetingName() {
+    final user = _auth.currentUser;
+    // Use display name from Firestore profile as the primary source
+    return user?.displayName ?? 'Friend'; // Fallback
+  }
+
+  double _monthlyTotal(List<Expense> expenses) {
+    final now = DateTime.now();
+    return expenses
+        .where((e) {
+          final d = e.timestamp.toDate();
+          return d.year == now.year && d.month == now.month;
+        })
+        .fold<double>(0.0, (sum, e) => sum + e.amount);
+  }
+
+  // Dialog for signing out
+  Future<void> _showSignOutDialog(BuildContext context) async {
+    final theme = Theme.of(context);
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Confirm Logout'),
-          content: const Text('Are you sure you want to log out?'),
+          title: const Text('Sign Out?'),
+          content: const Text('Are you sure you want to sign out?'),
           actions: <Widget>[
             TextButton(
               child: const Text('Cancel'),
@@ -82,13 +170,12 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Logout'),
-              onPressed: () async {
+                  backgroundColor: theme.colorScheme.error,
+                  foregroundColor: theme.colorScheme.onError),
+              child: const Text('Sign Out'),
+              onPressed: () {
                 Navigator.of(dialogContext).pop();
-                await _auth.signOut();
+                _authService.signOut();
               },
             ),
           ],
@@ -97,117 +184,142 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Home'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
-            onPressed: () {
-              _showLogoutDialog(context);
-            },
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Search Bar (no changes)
-              const TextField(
-                decoration: InputDecoration(
-                  hintText: 'Search',
-                  prefixIcon: Icon(Icons.search),
-                  suffixIcon: Icon(Icons.close),
+  Widget _header(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = theme.extension<AppTokens>()!;
+
+    return StreamBuilder<UserProfile>(
+      stream: _firestoreService.getUserProfile(),
+      builder: (context, snapshot) {
+        final displayName = snapshot.data?.displayName ?? _greetingName();
+        final photoURL = snapshot.data?.photoURL;
+        final avatarChild = photoURL != null
+            ? CircleAvatar(backgroundImage: NetworkImage(photoURL), radius: 18)
+            : Icon(Icons.person, color: tokens.iconColor);
+
+        return Row(
+          children: [
+            GestureDetector(
+              onTap: () {
+                Navigator.of(context)
+                    .push(FadePageRoute(page: const ProfileScreen()));
+              },
+              child: CircleAvatar(
+                radius: 18,
+                backgroundColor: tokens.iconColor.withOpacity(0.12),
+                child: avatarChild,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Hi, $displayName!', style: theme.textTheme.titleLarge),
+                  Text('Manage your expenses smartly',
+                      style: theme.textTheme.bodyMedium),
+                ],
+              ),
+            ),
+            Icon(Icons.chat_bubble_outline_rounded, color: tokens.iconColor),
+            const SizedBox(width: 12),
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'signOut') {
+                  _showSignOutDialog(context);
+                }
+              },
+              icon: Icon(Icons.settings_outlined, color: tokens.iconColor),
+              itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                const PopupMenuItem<String>(
+                  value: 'signOut',
+                  child: Text('Sign Out'),
                 ),
-              ),
-              const SizedBox(height: 24),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
 
-              // Action Buttons Grid
-              GridView.count(
-                crossAxisCount: 2,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  // --- MODIFIED: Scan Receipt Button ---
-                  _buildActionButton(context,
-                      icon: Icons.receipt,
-                      label: 'Scan Receipt',
-                      onPressed: _scanReceipt, // <-- Calls the new, powerful OCR function
-                  ),
-                  _buildActionButton(context,
-                      icon: Icons.picture_as_pdf,
-                      label: 'Parse PDF',
-                      onPressed: () { /* TODO: Implement PDF Parsing */ }),
-                  _buildActionButton(context,
-                      icon: Icons.mic,
-                      label: 'Voice to Text',
-                      onPressed: () { /* TODO: Implement Voice to Text */ }),
-                  _buildActionButton(context,
-                      icon: Icons.edit_note,
-                      label: 'Text Entry',
-                      onPressed: () { 
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const AddExpenseScreen()),
-                        );
-                      }),
-                ],
+  Widget _actionsRow(BuildContext context) {
+    final tokens = Theme.of(context).extension<AppTokens>()!;
+    final theme = Theme.of(context);
+    Widget btn(IconData icon, String label, VoidCallback onTap) {
+      return Expanded(
+        child: Column(
+          children: [
+            GestureDetector(
+              onTap: onTap,
+              child: Container(
+                height: 54,
+                width: 54,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow:
+                      Theme.of(context).extension<AppShadows>()!.cardShadow,
+                  border: Border.all(
+                      color: theme.colorScheme.onSurface.withOpacity(0.06)),
+                ),
+                child: Icon(icon, color: tokens.iconColor),
               ),
-              const SizedBox(height: 24),
+            ),
+            const SizedBox(height: 6),
+            Text(label, style: theme.textTheme.bodyMedium),
+          ],
+        ),
+      );
+    }
 
-              // Reports Section (no changes)
-              _buildSectionHeader('Reports'),
-              const SizedBox(height: 16),
-              _buildActionButton(context,
-                  icon: Icons.calendar_today,
-                  label: 'Monthly Report',
-                  onPressed: () { /* TODO: Implement */ },
-                  isFullWidth: true),
-              const SizedBox(height: 16),
-              GridView.count(
-                crossAxisCount: 2,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                   _buildActionButton(context,
-                      icon: Icons.calendar_view_week,
-                      label: 'Yearly Report',
-                      onPressed: () { /* TODO: Implement */ }),
-                  _buildActionButton(context,
-                      icon: Icons.edit_calendar,
-                      label: 'Custom Report',
-                      onPressed: () { /* TODO: Implement */ }),
-                ],
-              ),
-               const SizedBox(height: 24),
-              _buildSectionHeader('Personal'),
-              const SizedBox(height: 16),
-              GridView.count(
-                crossAxisCount: 2,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  _buildActionButton(context,
-                      icon: Icons.person_outline,
-                      label: 'Profile',
-                      onPressed: () { /* TODO: Implement */ }),
-                  _buildActionButton(context,
-                      icon: Icons.settings_outlined,
-                      label: 'Settings',
-                      onPressed: () { /* TODO: Implement */ }),
-                ],
+    return Row(
+      children: [
+        btn(Icons.payment, 'Expenses', () => Navigator.of(context).push(FadePageRoute(page: const ExpensesScreen()))),
+        const SizedBox(width: 12),
+        btn(Icons.analytics, 'Analysis',() => Navigator.of(context).push(FadePageRoute(page: const ReportsScreen()))),
+        const SizedBox(width: 12),
+        btn(Icons.download_rounded, 'Reports', () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: const Text('Reports coming soon'),
+                backgroundColor: Theme.of(context).colorScheme.onBackground),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _inputMethodCard({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    final tokens = Theme.of(context).extension<AppTokens>()!;
+    final theme = Theme.of(context);
+    return Flexible(
+      flex: 1,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
+          decoration: BoxDecoration(
+            color: tokens.primaryAccent,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: Theme.of(context).extension<AppShadows>()!.cardShadow,
+            border: Border.all(
+                color: theme.colorScheme.onSurface.withOpacity(0.06)),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: tokens.primaryText, size: 28),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyLarge
+                    ?.copyWith(color: tokens.primaryText),
               ),
             ],
           ),
@@ -216,47 +328,220 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Helper widget for section headers (no changes)
-  Widget _buildSectionHeader(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 20,
-        fontWeight: FontWeight.bold,
-        color: Colors.white,
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFEFF7F4), Color(0xFFF7F9F9)],
+          ),
+        ),
+        child: SafeArea(
+          child: StreamBuilder<List<Expense>>(
+            stream: _firestoreService.getExpensesStream(),
+            builder: (context, snapshot) {
+              final expenses = snapshot.data ?? [];
+              final monthly = _monthlyTotal(expenses);
+              final latest = expenses.take(3).toList();
+
+              return SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _header(context),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow:
+                            Theme.of(context).extension<AppShadows>()!.cardShadow,
+                        border: Border.all(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withOpacity(0.06)),
+                      ),
+                      child: Column(
+                        children: [
+                          BalanceCard(
+                              currency: 'INR',
+                              amount: monthly,
+                              subtitle: 'This month',
+                              delta: 421.03),
+                          const SizedBox(height: 12),
+                          const Divider(height: 1),
+                          const SizedBox(height: 12),
+                          _actionsRow(context),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Latest Transactions',
+                            style: Theme.of(context).textTheme.headlineMedium),
+                        TextButton(
+                          onPressed: () => Navigator.of(context)
+                              .push(FadePageRoute(page: const ExpensesScreen())),
+                          style: TextButton.styleFrom(
+                            foregroundColor:
+                                Theme.of(context).colorScheme.primary,
+                          ),
+                          child: const Text('See All'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    if (snapshot.connectionState == ConnectionState.waiting)
+                      const Center(
+                          child: Padding(
+                              padding: EdgeInsets.all(16),
+                              child: CircularProgressIndicator()))
+                    else if (latest.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text('No recent transactions.',
+                            style: Theme.of(context).textTheme.bodyMedium),
+                      )
+                    else
+                      Column(
+                        children: List.generate(
+                          latest.length,
+                          (i) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: TransactionTile(expense: latest[i], index: i),
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 18),
+                    Text('Add Expense By',
+                        style: Theme.of(context).textTheme.headlineMedium),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        // --- The Voice Entry button now calls the correct, robust handler ---
+                        _inputMethodCard(
+                          icon: Icons.mic,
+                          label: 'Voice Entry',
+                          onTap: _handleVoiceInput,
+                        ),
+                        // ------------------------------------
+                        const SizedBox(width: 12),
+                        _inputMethodCard(
+                          icon: Icons.picture_as_pdf_outlined,
+                          label: 'Import PDF',
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                  content: const Text('PDF import coming soon'),
+                                  backgroundColor: Theme.of(context)
+                                      .colorScheme
+                                      .onBackground),
+                            );
+                          },
+                        ),
+                        const SizedBox(width: 12),
+                        _inputMethodCard(
+                          icon: Icons.post_add_outlined,
+                          label: 'Add Manually',
+                          onTap: () => Navigator.of(context)
+                              .push(FadePageRoute(page: const AddExpenseScreen())),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _scanReceipt,
+                        icon: const Icon(Icons.receipt_long),
+                        label: const Text('Scan Receipt'),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
       ),
     );
   }
+}
 
-  // Helper widget for the reusable action buttons (no changes)
-  Widget _buildActionButton(BuildContext context,
-      {required IconData icon, required String label, required VoidCallback onPressed, bool isFullWidth = false}) {
-    return GestureDetector(
-      onTap: onPressed,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFF2A2A2A),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: isFullWidth ? CrossAxisAlignment.start : CrossAxisAlignment.center,
-          children: [
-            Icon(icon, color: Colors.white, size: 28),
-            const SizedBox(height: 12),
-            Text(
-              label,
-              textAlign: isFullWidth ? TextAlign.start : TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-                fontSize: 16,
-              ),
-            ),
-          ],
+// --- NEW HELPER WIDGET FOR THE DIALOG ---
+// It's cleaner to put the dialog UI in its own widget.
+class ListeningDialog extends StatefulWidget {
+  final SpeechToText speechToText;
+  final VoidCallback onCancel;
+  final Future<String?> resultFuture;
+
+  const ListeningDialog({
+    super.key,
+    required this.speechToText,
+    required this.onCancel,
+    required this.resultFuture,
+  });
+
+  @override
+  State<ListeningDialog> createState() => _ListeningDialogState();
+}
+
+class _ListeningDialogState extends State<ListeningDialog> {
+  String _currentWords = "";
+
+  @override
+  void initState() {
+    super.initState();
+    // Listen to the speech engine's notifications to update the UI
+    widget.speechToText.statusListener = (status) => setState((){}); // Redraw on status change
+    widget.speechToText.errorListener = (error) => setState((){}); // Redraw on error
+    
+    // Auto-close dialog when future completes
+    widget.resultFuture.whenComplete(() {
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // We get the live text directly from the speech engine's last result
+    _currentWords = widget.speechToText.lastRecognizedWords;
+
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.mic, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 8),
+          const Text('Listening...'),
+        ],
+      ),
+      content: Text(
+        _currentWords.isEmpty ? "Say your expense, e.g., 'Groceries for 500'" : _currentWords,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 18,
+          color: _currentWords.isEmpty ? Colors.grey.shade600 : Theme.of(context).textTheme.bodyLarge?.color,
         ),
       ),
+      actionsAlignment: MainAxisAlignment.center,
+      actions: [
+        TextButton(
+          onPressed: widget.onCancel,
+          child: const Text('Cancel'),
+        ),
+      ],
     );
   }
 }

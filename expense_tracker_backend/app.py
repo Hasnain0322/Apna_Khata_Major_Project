@@ -2,82 +2,138 @@ import os
 import re
 import joblib
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from google.cloud import vision
-from google.oauth2 import service_account
+from sklearn.exceptions import InconsistentVersionWarning
+import warnings
+
+# --- 0. PRE-CONFIGURATION ---
+warnings.filterwarnings("ignore", category=InconsistentVersionWarning)
+
 
 # --- 1. INITIAL SETUP ---
 app = Flask(__name__)
 
+CORS(app)
 # --- 2. LOAD MODELS & CLIENTS ON STARTUP ---
+
 try:
     category_classifier = joblib.load('category_classifier.pkl')
-    print("✅ Category classification model loaded.")
+    print("✅ Category classification model loaded successfully .!")
 except FileNotFoundError:
     print("❌ ERROR: 'category_classifier.pkl' not found. Please run train_model.py first.")
     exit()
 
 try:
-    credentials = service_account.Credentials.from_service_account_file("gcp-vision-credentials.json")
-    vision_client = vision.ImageAnnotatorClient(credentials=credentials)
-    print("✅ Google Cloud Vision client initialized.")
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "gcp-vision-credentials.json"
+    vision_client = vision.ImageAnnotatorClient()
+    print("✅ Google Cloud Vision client initialized successfully.")
 except Exception as e:
-    print(f"❌ ERROR: Could not initialize Google Vision client: {e}"); exit()
+    print(f"❌ ERROR: Could not initialize Google Vision client: {e}")
+    print("   Please ensure 'gcp-vision-credentials.json' is present, valid, and that you have enabled the Vision API and billing.")
+    exit()
 
 
-# --- 3. HELPER FUNCTIONS ---
-def find_category_by_keyword(text):
+# --- 3. KEYWORD DICTIONARY & HELPER FUNCTIONS ---
+
+CATEGORY_KEYWORDS = {
+    'Food & Dining': ['biryani', 'pizza', 'burger', 'sandwich', 'pasta', 'noodles', 'momo', 'thali', 'biriyani', 'dosa', 'idli', 'pav bhaji', 'maggi', 'roll', 'shawarma', 'wrap', 'ice cream', 'cake', 'pastry', 'dessert', 'coffee', 'tea', 'juice', 'smoothie', 'milkshake', 'biryani house', 'barbecue', 'kebab', 'tikka', 'restaurant', 'cafe', 'canteen', 'dining', 'buffet', 'meal', 'zomato', 'swiggy', 'dominos', 'pizza hut', "domino's", "mcdonald's", 'mcdonald', 'kfc', 'subway', 'burger king', 'starbucks', 'barista', '99 pancakes', 'chicken tandoori', 'hocco','apple', 'bikanervala', 'haldiram', 'cafe coffee day', 'baskin robbins'],
+    'Grocery': ['rice', 'wheat', 'dal', 'pulses', 'sugar', 'salt', 'milk', 'bread', 'butter', 'oil', 'tea powder', 'coffee powder', 'vegetables', 'fruits', 'tomato', 'potato', 'onion', 'cabbage', 'spinach', 'coriander', 'lemon', 'masala', 'atta', 'besan', 'poha', 'suji', 'jaggery', 'eggs', 'meat', 'fish', 'chicken', 'mutton', 'prawns', 'spices', 'detergent', 'soap', 'toothpaste', 'grocery', 'bigbasket', 'dmart', 'reliance fresh', 'more supermarket', "nature's basket", 'spencer’s', 'jiomart'],
+    
+    'Transport': ['taxi', 'cab', 'auto', 'bus', 'train', 'flight', 'airline', 'airfare', 'metro', 'tram', 'ferry', 'fuel', 'petrol', 'diesel', 'cng', 'parking', 'toll', 'ticket', 'pass', 'travel card', 'ola', 'uber', 'rapido', 'blablacar', 'redbus', 'irctc'],
+    'Shopping & Lifestyle': ['shirt', 'jeans', 't-shirt', 'tshirt', 'trousers', 'kurta', 'saree', 'dress', 'shoes', 'sandals', 'chappal', 'watch', 'wallet', 'handbag', 'purse', 'belt', 'accessories', 'jacket', 'coat', 'sweater', 'hoodie', 'spectacles', 'sunglasses', 'electronics', 'phone', 'laptop', 'charger', 'earphones', 'headphones', 'camera', 'mall', 'boutique', 'apparel', 'amazon', 'flipkart', 'myntra', 'ajio', 'meesho', 'snapdeal', 'shopclues', 'tatacliq', 'h&m', 'zara', 'nike', 'adidas', 'puma', 'reebok', 'lifestyle'],
+    'Healthcare & Medicine': ['doctor', 'hospital', 'clinic', 'pharmacy', 'chemist', 'medicine', 'injection', 'vaccine', 'blood test', 'sugar test', 'x-ray', 'scan', 'ct scan', 'mri', 'consultation', 'surgery', 'therapy', 'physiotherapy', 'dentist', 'dental', 'ayurvedic', 'homeopathy', 'optician', 'spectacles', 'hearing aid', 'apollo pharmacy', 'medplus', 'pharmeasy', '1mg', 'netmeds', 'practo'],
+    'Personal Care & Grooming': ['salon','spa', 'haircut', 'hair wash', 'shaving', 'trimming', 'beard', 'hair color', 'facial', 'manicure', 'pedicure', 'beauty', 'makeup', 'wax', 'threading', 'perfume', 'deodorant','prostitute','lotion', 'shampoo', 'conditioner', 'body wash', 'soap', 'comb', 'mirror', 'towel', 'grooming kit', 'nykaa', 'purplle', 'wow skin', 'beardo', 'mcaffeine', 'urban company'],
+    'Utilities & Bills': ['electricity bill', 'water bill', 'gas bill', 'broadband', 'wifi', 'internet', 'cable', 'dth', 'recharge', 'mobile bill', 'postpaid', 'prepaid', 'landline', 'rent', 'emi', 'loan', 'insurance', 'subscription', 'netflix', 'prime', 'hotstar', 'spotify', 'zee5', 'sony liv', 'voot', 'youtube premium'],
+    'Others': ['charity', 'donation', 'gift', 'stationery', 'pen', 'pencil', 'notebook', 'printing', 'photocopy', 'laundry', 'tailoring', 'repair', 'maintenance', 'pet food', 'toy', 'game', 'miscellaneous']
+}
+
+def get_category_from_keywords(text):
+    """Searches for keywords in the text to determine a category."""
     text_lower = text.lower()
-    keyword_map = {
-        'Food': ['pizza', 'groceries', 'restaurant', 'lunch', 'dinner', 'coffee', 'snacks', 'zomato', 'swiggy', 'biryani', 'burger', 'cafe', 'bakery', 'sweets'],
-        'Shopping': ['mobile phone', 'shirt', 'jeans', 'shoes', 'book', 'laptop', 'teddy bear', 'amazon', 'flipkart', 'myntra', 'nykaa', 'toy', 'outfit', 'dress', 'apparel', 'electronics'],
-        'Entertainment': ['movie', 'netflix', 'spotify', 'concert', 'bookmyshow', 'hotstar', 'prime video'],
-        'Transport': ['uber', 'taxi', 'bus fare', 'flight', 'fuel', 'metro', 'ola', 'rapido', 'petrol', 'diesel'],
-        'Health': ['medicine', 'doctor', 'pharmacy', 'apollo', 'pharmeasy', 'netmeds', 'hospital', 'clinic', 'diagnostics'],
-        'Utilities': ['electricity bill', 'internet bill', 'phone recharge', 'rent', 'broadband', 'airtel', 'jio', 'vi', 'vodafone', 'water bill', 'invoice']
-    }
-    for category, keywords in keyword_map.items():
-        if any(keyword in text_lower for keyword in keywords): return category
+    for category, keywords in CATEGORY_KEYWORDS.items():
+        for keyword in keywords:
+            if keyword in text_lower:
+                return category
     return None
 
 def extract_amount(text):
-    numbers = re.findall(r'[\d,]+\.\d{2}|[\d,]+', text)
-    if numbers: return float(numbers[0].replace(',', ''))
-    return None
+    """
+    Intelligently extracts the amount from a text string.
+    Priority Order:
+    1. Looks for numbers following keywords like 'for', 'paid', 'of', 'cost', 'rs', 'inr'.
+    2. If no keywords found, and there's only ONE number in the string, returns that number.
+    3. If multiple numbers exist with no keywords, returns the LARGEST number as a best guess.
+    4. Returns None if no numbers are found.
+    """
+    text_lower = text.lower()
+    
+    # Priority 1: Check for keywords followed by a number
+    amount_keywords = ['for', 'paid', 'cost', 'of', 'rs', 'inr', 'amount', 'bill']
+    for keyword in amount_keywords:
+        # Regex: finds the keyword, then any characters except numbers, then captures the number.
+        # This handles cases like "paid rs. 500" or "bill of 250"
+        match = re.search(f'{keyword}[^0-9]*(\\d+\\.?\\d*)', text_lower)
+        if match:
+            return float(match.group(1))
+
+    # Priority 2 & 3: No keywords found, analyze all numbers in the string
+    numbers = re.findall(r'\d+\.?\d*', text_lower)
+    if not numbers:
+        return None # No numbers found
+    
+    float_numbers = [float(n) for n in numbers]
+
+    if len(float_numbers) == 1:
+        return float_numbers[0] # Only one number, it must be the amount
+    else:
+        # Multiple numbers without context, assume the largest is the amount
+        # This solves "ordered from 99 pancakes for 200" -> chooses 200
+        return max(float_numbers)
 
 def extract_item(text, amount):
-    if amount:
-        amount_str = str(int(amount) if amount % 1 == 0 else amount)
-        text = text.lower().replace(amount_str, '')
-    stop_words = ['bought', 'paid', 'for', 'a', 'an', 'the', 'rs', 'rupees', 'was', 'of', 'my', 'recharged', 'new', 'got', 'purchase', 'cost', 'from', 'on']
-    querywords = text.split(); resultwords = [word for word in querywords if word.lower() not in stop_words]
-    item = ' '.join(resultwords).strip().title(); return item if item else "Unknown Item"
+    """
+    Cleans the text to create a plausible item name.
+    It now removes ALL numbers from the text to avoid including them in the item name.
+    """
+    text_lower = text.lower()
+    
+    # Remove all numbers from the text to clean it up
+    text_no_numbers = re.sub(r'\d+\.?\d*', '', text_lower).strip()
+
+    stop_words = [
+        'bought', 'paid', 'for', 'a', 'an', 'the', 'rs', 'inr', 'rupees', 'was', 'of',
+        'my', 'recharged', 'new', 'got', 'purchase', 'cost', 'bill', 'amount'
+    ]
+    querywords = text_no_numbers.split()
+    
+    resultwords  = [word for word in querywords if word.lower() not in stop_words]
+    item = ' '.join(resultwords).strip()
+    
+    # Remove extra spaces that might result from removing words
+    item = re.sub(r'\s+', ' ', item).title()
+    
+    return item if item else "Unknown Item"
 
 def parse_receipt_text(text):
-    lines = text.lower().split('\n'); amount, category, item = None, None, "Scanned Receipt"
-    high_priority_keywords = ['grand total', 'total due', 'amount paid', 'balance']; low_priority_keywords = ['total', 'subtotal', 'amount']
-    found_amounts = []
-    for line in reversed(lines):
-        if any(keyword in line for keyword in high_priority_keywords):
-            found_amount = extract_amount(line)
-            if found_amount: amount = found_amount; break
-    if amount is None:
-        for line in reversed(lines):
-            if any(keyword in line for keyword in low_priority_keywords):
-                found_amount = extract_amount(line)
-                if found_amount: found_amounts.append(found_amount)
-        if found_amounts: amount = min(found_amounts)
-    if amount is None:
-        all_numbers_str = re.findall(r'[\d,]+\.?\d*', text)
-        if all_numbers_str:
-            valid_numbers = [float(n.replace(',', '')) for n in all_numbers_str if n]
-            if valid_numbers: amount = max(valid_numbers)
-    category = find_category_by_keyword(text)
+    """Analyzes OCR text to find the total, a category, and a vendor name."""
+    lines = text.lower().split('\n')
+    item = "Scanned Receipt"
+
+    # Use the new intelligent amount extraction on the full text
+    amount = extract_amount(text)
+            
+    # Guess the category using the comprehensive keyword function.
+    category = get_category_from_keywords(text) or 'Others'
+            
+    # Guess the item/vendor name (often one of the first few non-empty lines).
     for line in lines:
-        clean_line = line.strip()
-        if len(clean_line) > 2 and not clean_line.replace('.', '', 1).isdigit(): item = clean_line.title(); break
-    if category is None:
-        if item != "Scanned Receipt": prediction = category_classifier.predict([item]); category = str(prediction[0])
-        else: category = 'Other'
+        if line.strip() and len(line.strip()) > 2:
+            # A simple heuristic to avoid picking a line that is just a number
+            if not re.fullmatch(r'[\d\s.,-]+', line.strip()):
+                item = line.strip().title()
+                break
+
     return {'item': item, 'amount': amount, 'category': category}
 
 
@@ -85,58 +141,67 @@ def parse_receipt_text(text):
 
 @app.route('/process', methods=['POST'])
 def process_text():
+    """Endpoint for simple text-based expenses."""
     print("\n--- Request received at /process endpoint! ---")
-    try:
-        data = request.get_json()
-        if not data or 'text' not in data: return jsonify({'error': 'Invalid input: Missing "text" field.'}), 400
-        input_text = data['text']
+    data = request.get_json()
+    if not data or 'text' not in data:
+        return jsonify({'error': 'Invalid input. Please provide a "text" field.'}), 400
+
+    input_text = data['text']
+    
+    predicted_category = get_category_from_keywords(input_text)
+    if not predicted_category:
+        print("-> No keyword match found. Using ML model for classification...")
+        predicted_category = category_classifier.predict([input_text])[0]
+    else:
+        print(f"-> Keyword match found! Category: {predicted_category}")
+    
+    # Use the new intelligent amount extraction function
+    amount = extract_amount(input_text)
+    if amount is None:
+        return jsonify({'error': 'Could not determine the amount from the text.'}), 400
         
-        amount = extract_amount(input_text)
-        if amount is None: return jsonify({'error': 'Could not determine the amount from the text.'}), 400
+    # Use the improved item extraction function
+    item = extract_item(input_text, amount)
 
-        predicted_category = find_category_by_keyword(input_text)
-        if predicted_category is None:
-            print("No keyword found, using ML model for prediction...")
-            # THE CRITICAL FIX IS HERE: Convert the NumPy type to a standard Python string
-            prediction_result = category_classifier.predict([input_text])
-            predicted_category = str(prediction_result[0])
-        else:
-            print(f"Found high-confidence keyword, category set to: {predicted_category}")
+    response = {
+        'item': item,
+        'amount': amount,
+        'category': predicted_category
+    }
+    print(f"✅ Processed text successfully: {response}")
+    return jsonify(response)
 
-        item = extract_item(input_text, amount)
-        response = {'item': item, 'amount': amount, 'category': predicted_category}
-        print(f"✅ Processed text successfully: {response}")
-        return jsonify(response)
-    except Exception as e:
-        print(f"❌ An error occurred in /process: {e}")
-        return jsonify({'error': 'An internal server error occurred.'}), 500
 
-@app.route('/process-image-receipt', methods=['POST'])
-def process_image_receipt():
-    print("\n--- Request received at /process-image-receipt endpoint! ---")
-    if 'receipt' not in request.files: return jsonify({'error': 'No image file found.'}), 400
-    file = request.files['receipt']
+@app.route('/process-voice-expense', methods=['POST'])
+def process_voice_expense():
+    """
+    This endpoint now ONLY performs Speech-to-Text (Transcription).
+    It takes audio in and returns a simple text string out.
+    """
+    print("\n--- Request received at /process-voice-expense for STT ---")
+    if not wit_client: return jsonify({'error': 'Wit.ai client is not configured.'}), 503
+    if 'audio' not in request.files: return jsonify({'error': 'No audio file found.'}), 400
+
+    audio_file = request.files['audio']
     try:
-        image_content = file.read()
-        image = vision.Image(content=image_content)
-        response = vision_client.text_detection(image=image)
-        if response.error.message: raise Exception(response.error.message)
-        if response.text_annotations:
-            full_ocr_text = response.text_annotations[0].description
-            print("✅ Google Vision OCR successful. Analyzing with smart parser...")
-            processed_data = parse_receipt_text(full_ocr_text)
-            if processed_data.get('amount') is None: return jsonify({'error': 'Could not determine total from receipt text.'}), 400
-            print(f"✅ Processed image successfully: {processed_data}")
-            return jsonify(processed_data)
-        else:
-            return jsonify({'error': 'No text detected in the image.'}), 400
+        print("Sending audio to Wit.ai for transcription...")
+        wit_response = wit_client.speech(audio_file.stream, {'Content-Type': 'audio/wav'})
+        
+        transcribed_text = wit_response.get('text')
+        if not transcribed_text:
+            return jsonify({'error': 'Speech could not be transcribed.'}), 400
+
+        # Return a simple JSON with just the text
+        response = {'transcribed_text': transcribed_text}
+        print(f"✅ Transcription successful: {response}")
+        return jsonify(response)
+        
     except Exception as e:
-        print(f"❌ An error occurred during image processing: {e}")
-        return jsonify({'error': 'An internal error occurred.'}), 500
+        print(f"❌ An error occurred during voice transcription: {e}")
+        return jsonify({'error': 'An internal error occurred during transcription.'}), 500
+
 
 # --- 5. RUN THE APP ---
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
-
-
-    

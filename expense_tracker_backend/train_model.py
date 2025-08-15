@@ -1,43 +1,61 @@
 import pandas as pd
+from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import SGDClassifier
 from sklearn.pipeline import Pipeline
+from sklearn.metrics import accuracy_score
 import joblib
 
-print("Starting model training process...")
+print("--- Model Training Script Started ---")
 
-# 1. Load Data from CSV
+# 1. Load the dataset
 try:
-    data = pd.read_csv('sample_data.csv')
-    print(f"Successfully loaded {len(data)} training examples.")
+    df = pd.read_csv('dataset.csv')
+    print(f"✅ Dataset 'dataset.csv' loaded successfully. Found {len(df)} rows.")
 except FileNotFoundError:
-    print("Error: 'sample_data.csv' not found. Make sure it's in the same directory.")
+    print("❌ ERROR: 'dataset.csv' not found. Please make sure the dataset file is in the same directory.")
     exit()
 
-# 2. Define Features (X) and Target (y)
-X = data['text']
-y = data['category']
+# Handle any potential empty rows
+df.dropna(subset=['text', 'category'], inplace=True)
+if df.empty:
+    print("❌ ERROR: Dataset is empty after dropping empty rows. Please check your CSV file.")
+    exit()
 
-# 3. Create a Scikit-learn Pipeline
-text_classifier = Pipeline([
-    # --- THIS IS THE KEY MODIFICATION ---
-    # The `ngram_range=(1, 3)` parameter tells the model to look at
-    # single words, pairs of words (bigrams), and triplets of words (trigrams).
-    # This helps it understand context, like "mobile phone" being one concept.
-    ('tfidf', TfidfVectorizer(stop_words='english', ngram_range=(1, 3))),
-    # ------------------------------------
-    
-    # The classifier itself remains the same.
+# 2. Define features (X) and target (y)
+X = df['text']
+y = df['category']
+
+# 3. Split data into training and testing sets
+# This helps us evaluate how well the model performs on data it has never seen before.
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+print(f"✅ Data split into {len(X_train)} training samples and {len(X_test)} testing samples.")
+
+# 4. Build the machine learning pipeline
+# A pipeline chains together multiple steps. Here:
+#   - TfidfVectorizer: Converts text into a matrix of numerical features.
+#   - SGDClassifier: A fast and effective linear classifier, great for text.
+text_clf = Pipeline([
+    ('tfidf', TfidfVectorizer(stop_words='english')),
     ('clf', SGDClassifier(loss='hinge', penalty='l2',
                            alpha=1e-3, random_state=42,
                            max_iter=10, tol=None)),
 ])
+print("✅ ML Pipeline created.")
 
-# 4. Train the new, smarter model on our data
-print("Training the category classification model with n-grams...")
-text_classifier.fit(X, y)
-print("Training complete.")
+# 5. Train the model
+print("⏳ Training the model...")
+text_clf.fit(X_train, y_train)
+print("✅ Model training complete.")
 
-# 5. Save the new model file. This will overwrite the old one.
-joblib.dump(text_classifier, 'category_classifier.pkl')
-print("New, smarter model successfully saved to 'category_classifier.pkl'")
+# 6. Evaluate the model's performance on the test set
+predictions = text_clf.predict(X_test)
+accuracy = accuracy_score(y_test, predictions)
+print(f"📈 Model Accuracy on Test Data: {accuracy:.2%}")
+
+# 7. Save the trained pipeline to a file
+# This is the file that your Flask app (app.py) will load.
+model_filename = 'category_classifier.pkl'
+joblib.dump(text_clf, model_filename)
+print(f"\n✅ Model successfully trained and saved as '{model_filename}'!")
+print("--- Script Finished ---")

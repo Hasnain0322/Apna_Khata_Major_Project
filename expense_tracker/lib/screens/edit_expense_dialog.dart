@@ -15,18 +15,30 @@ class _EditExpenseDialogState extends State<EditExpenseDialog> {
   late String _selectedCategory;
 
   final _formKey = GlobalKey<FormState>();
+  // This is the master list of categories your UI supports.
   final List<String> _categories = [
-    'Food', 'Transport', 'Shopping', 'Utilities', 'Health', 
-    'Entertainment', 'Education', 'Personal Care', 'Gifts & Donations', 'Other'
+    'Food', 'Transport', 'Shopping', 'Utilities', 'Health', 'Entertainment', 
+    'Education', 'Personal Care', 'Gifts & Donations', 'Other'
   ];
 
   @override
   void initState() {
     super.initState();
-    // Initialize controllers with the data passed from the parent screen
     _itemController = TextEditingController(text: widget.initialData['item']);
     _amountController = TextEditingController(text: widget.initialData['amount'].toString());
-    _selectedCategory = widget.initialData['category'];
+    
+    // --- THIS IS THE FIX ---
+    String initialCategory = widget.initialData['category'];
+    // Check if the category from the AI exists in our list.
+    if (_categories.contains(initialCategory)) {
+      // If it exists, use it.
+      _selectedCategory = initialCategory;
+    } else {
+      // If it DOES NOT exist (e.g., "Food & Dining"), default to "Other".
+      // This prevents the app from crashing.
+      _selectedCategory = 'Other';
+    }
+    // --- END OF FIX ---
   }
 
   @override
@@ -38,13 +50,11 @@ class _EditExpenseDialogState extends State<EditExpenseDialog> {
 
   void _onSave() {
     if (_formKey.currentState!.validate()) {
-      // Create a map of the updated data
       final updatedData = {
         'item': _itemController.text,
         'amount': double.tryParse(_amountController.text) ?? 0.0,
         'category': _selectedCategory,
       };
-      // Pop the dialog and return the updated data
       Navigator.of(context).pop(updatedData);
     }
   }
@@ -62,34 +72,25 @@ class _EditExpenseDialogState extends State<EditExpenseDialog> {
               TextFormField(
                 controller: _itemController,
                 decoration: const InputDecoration(labelText: 'Item'),
-                validator: (value) => value!.isEmpty ? 'Please enter an item' : null,
+                validator: (value) => value == null || value.isEmpty ? 'Please enter an item' : null,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               TextFormField(
                 controller: _amountController,
                 decoration: const InputDecoration(labelText: 'Amount'),
                 keyboardType: TextInputType.number,
                 validator: (value) {
-                  if (value!.isEmpty) return 'Please enter an amount';
+                  if (value == null || value.isEmpty) return 'Please enter an amount';
                   if (double.tryParse(value) == null) return 'Please enter a valid number';
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 value: _selectedCategory,
                 decoration: const InputDecoration(labelText: 'Category'),
-                items: _categories.map((String category) {
-                  return DropdownMenuItem<String>(
-                    value: category,
-                    child: Text(category),
-                  );
-                }).toList(),
-                onChanged: (newValue) {
-                  if (newValue != null) {
-                    setState(() => _selectedCategory = newValue);
-                  }
-                },
+                items: _categories.map((String category) => DropdownMenuItem<String>(value: category, child: Text(category))).toList(),
+                onChanged: (newValue) => setState(() => _selectedCategory = newValue ?? _selectedCategory),
                 validator: (value) => value == null ? 'Please select a category' : null,
               ),
             ],
@@ -97,14 +98,8 @@ class _EditExpenseDialogState extends State<EditExpenseDialog> {
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(), // Pop without returning data
-          child: const Text('Cancel'),
-        ),
-        ElevatedButton(
-          onPressed: _onSave,
-          child: const Text('Save Changes'),
-        ),
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        ElevatedButton(onPressed: _onSave, child: const Text('Save Changes')),
       ],
     );
   }

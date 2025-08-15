@@ -1,94 +1,121 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:expense_tracker/models/expense_model.dart';
 import 'package:expense_tracker/services/firestore_service.dart';
+import 'package:expense_tracker/widgets/expense-list-item.dart';
+
+// Enum to define the available filter options
+enum FilterType { byDate, byAmount }
 
 class ExpensesScreen extends StatefulWidget {
   const ExpensesScreen({super.key});
-
   @override
   State<ExpensesScreen> createState() => _ExpensesScreenState();
 }
 
 class _ExpensesScreenState extends State<ExpensesScreen> {
   final FirestoreService _firestoreService = FirestoreService();
+  // State variable to hold the currently active filter
+  FilterType _currentFilter = FilterType.byDate;
+
+  Future<bool?> _showDeleteConfirmationDialog() {
+    final theme = Theme.of(context);
+    return showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Confirm Deletion'),
+          content: const Text('Are you sure you want to delete this expense? This action cannot be undone.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(false),style: TextButton.styleFrom(foregroundColor: theme.colorScheme.onPrimary),child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: theme.colorScheme.error),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Expenses'),
-        // Automatically implies a leading back button on some platforms, which is fine
-        automaticallyImplyLeading: false, 
+        title: const Text('History'),
+        // Add a filter button to the AppBar
+        actions: [
+          PopupMenuButton<FilterType>(
+            onSelected: (FilterType result) {
+              // Update the state when a new filter is chosen
+              setState(() {
+                _currentFilter = result;
+              });
+            },
+            icon: const Icon(Icons.filter_list),
+            itemBuilder: (BuildContext context) => <PopupMenuEntry<FilterType>>[
+              const PopupMenuItem<FilterType>(
+                value: FilterType.byDate,
+                child: Text('Most Recent'),
+              ),
+              const PopupMenuItem<FilterType>(
+                value: FilterType.byAmount,
+                child: Text('Highest Price'),
+              ),
+            ],
+          ),
+        ],
       ),
       body: StreamBuilder<List<Expense>>(
         stream: _firestoreService.getExpensesStream(),
         builder: (context, snapshot) {
-          // ==================== DEBUGGING CODE START ====================
-          // These print statements will show up in your VS Code/Android Studio "Debug Console"
-          print('StreamBuilder connection state: ${snapshot.connectionState}');
-          if (snapshot.hasError) {
-            print('!!! StreamBuilder Error: ${snapshot.error}');
-          }
-          if (snapshot.hasData) {
-            print('StreamBuilder has data. Number of expenses: ${snapshot.data!.length}');
-          }
-          // ===================== DEBUGGING CODE END =====================
+          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          if (snapshot.hasError) return Center(child: Text('Something went wrong: ${snapshot.error}'));
+          if (!snapshot.hasData || snapshot.data!.isEmpty) return Center(child: Text('No expenses found yet.', style: theme.textTheme.bodyLarge));
 
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          
-          // IMPORTANT: Check for an error *after* waiting.
-          if (snapshot.hasError) {
-            // Displaying the error in the UI is very helpful for debugging
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  'An error occurred.\n\nCheck your Debug Console for details.\n\nCommon causes:\n1. Firestore Security Rules are incorrect.\n2. The query requires a Firestore Index.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.red[300]),
-                ),
-              ),
-            );
-          }
-          
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(
-              child: Text(
-                'No expenses found.\nAdd one from the Home screen!',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 18, color: Colors.grey),
-              ),
-            );
+          // Create a mutable copy of the expenses list from the snapshot
+          final expenses = List<Expense>.from(snapshot.data!);
+
+          // Apply the sorting logic based on the current filter
+          if (_currentFilter == FilterType.byAmount) {
+            // Sort by amount, from highest to lowest
+            expenses.sort((a, b) => b.amount.compareTo(a.amount));
+          } else {
+            // Default sort: by date, from most recent to oldest
+            expenses.sort((a, b) => b.timestamp.compareTo(a.timestamp));
           }
 
-          final expenses = snapshot.data!;
           return ListView.builder(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
             itemCount: expenses.length,
             itemBuilder: (context, index) {
               final expense = expenses[index];
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                color: const Color(0xFF2A2A2A),
-                child: ListTile(
-                  title: Text(
-                    expense.item,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+              return Dismissible(
+                key: Key(expense.id),
+                direction: DismissDirection.endToStart,
+                confirmDismiss: (direction) => _showDeleteConfirmationDialog(),
+                onDismissed: (_) {
+                  _firestoreService.deleteExpense(expense.id);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('"${expense.item}" deleted.'), backgroundColor: theme.colorScheme.onBackground),
+                  );
+                },
+                background: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 6),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.error.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                  subtitle: Text(
-                    '${expense.category} • ${DateFormat.yMMMd().format(expense.timestamp.toDate())}',
-                  ),
-                  trailing: Text(
-                    // Assuming a currency like Rupees, adjust as needed
-                    '₹${expense.amount.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Colors.tealAccent,
-                    ),
-                  ),
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Icon(Icons.delete_forever, color: theme.colorScheme.error),
+                ),
+                child: Padding(
+                  // Using the updated ExpenseListItem
+                  padding: const EdgeInsets.symmetric(vertical: 4.0),
+                  child: ExpenseListItem(expense: expense, index: index),
                 ),
               );
             },

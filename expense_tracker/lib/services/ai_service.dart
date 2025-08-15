@@ -1,84 +1,110 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-// This new import is required for creating a multipart request to upload a file.
-import 'package:http_parser/http_parser.dart';
+import 'dart:async'; // Required for handling TimeoutException
+import 'dart:convert'; // Required for encoding and decoding JSON data
+import 'package:http/http.dart' as http; // The core package for making HTTP requests
+import 'package:http_parser/http_parser.dart'; // Required for specifying file content types in uploads
 
+/// A dedicated service class to handle all communication with the Python AI backend.
+/// This centralizes the network logic, making the UI code cleaner and easier to maintain.
 class AiService {
-  // IMPORTANT: This is the hardcoded IP address of your computer on your local Wi-Fi network.
-  // You must update this value every time your computer's IP address changes.
-  final String _baseUrl = 'http://192.168.31.56:5000'; // <-- UPDATE THIS AS NEEDED
+  // --- CONFIGURATION ---
+  // IMPORTANT: This is the IP address where your Python Flask server is running.
+  // You must update this value every time your computer's local IP address changes.
+  final String _baseUrl = 'http://192.168.0.104:5000'; // <-- UPDATE AS NEEDED
 
-  /// Sends a short, single sentence to the Python backend for ML-based processing.
-  /// Used for quick text entry and voice commands.
+  /// Sends a simple text string to the backend for analysis.
+  /// Used for both manual text entry and transcribed voice input.
+  /// This method calls the high-accuracy hybrid model on the backend.
   Future<Map<String, dynamic>?> processExpenseText(String text) async {
     try {
       final response = await http.post(
-        Uri.parse('$_baseUrl/process'), // Calls the ML model endpoint
-        headers: {
-          'Content-Type': 'application/json; charset=UTF-8',
-        },
+        Uri.parse('$_baseUrl/process'),
+        headers: {'Content-Type': 'application/json; charset=UTF-8'},
         body: json.encode({'text': text}),
-      ).timeout(const Duration(seconds: 15));
+      ).timeout(const Duration(seconds: 20));
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
-        print('Failed to process text. Status code: ${response.statusCode}');
-        print('Response body: ${response.body}');
+        print('Failed to process text. Status: ${response.statusCode}, Body: ${response.body}');
         return null;
       }
+    } on TimeoutException {
+      print('Error: Text processing timed out. The local server did not respond.');
+      return null;
+    } on http.ClientException catch (e) {
+      print('Error connecting to AI service for text processing: $e. Is the server running and the IP address correct?');
+      return null;
     } catch (e) {
-      print('Error connecting to the AI service for text processing: $e');
+      print('An unexpected error occurred during text processing: $e');
       return null;
     }
   }
 
-
-  // --- NEW METHOD TO UPLOAD AN IMAGE FOR BACKEND OCR ---
-  /// Uploads a receipt image to the backend for processing with Google Cloud Vision.
-  ///
-  /// [imagePath] is the local file path of the image taken by the user.
-  /// Returns the final structured JSON with 'item', 'amount', and 'category'.
+  /// Uploads a receipt image file to the backend for OCR and analysis.
   Future<Map<String, dynamic>?> analyzeReceiptImage(String imagePath) async {
     try {
-      // 1. Create a multipart request. This type of request is needed for file uploads.
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse('$_baseUrl/process-image-receipt') // <-- Calls the NEW image endpoint
+      var request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/process-image-receipt'));
+      request.files.add(
+        await http.MultipartFile.fromPath('receipt', imagePath, contentType: MediaType('image', 'jpeg'))
       );
+      var streamedResponse = await request.send().timeout(const Duration(seconds: 45));
+      var response = await http.Response.fromStream(streamedResponse);
 
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        print("Failed to analyze receipt image. Status: ${response.statusCode}, Body: ${response.body}");
+        return null;
+      }
+    } on TimeoutException {
+      print('Error: Image analysis timed out. The local server did not respond.');
+      return null;
+    } on http.ClientException catch (e) {
+      print('Error connecting to AI service for image analysis: $e. Is the server running and the IP address correct?');
+      return null;
+    } catch (e) {
+      print("An unexpected error occurred during image analysis: $e");
+      return null;
+    }
+  }
 
-      // 2. Attach the image file to the request.
+  // --- NEW METHOD FOR VOICE TRANSCRIPTION ---
+  /// Uploads a recorded audio file to the backend to get the transcribed text.
+  /// This method ONLY performs Speech-to-Text. The classification happens in a second step.
+  Future<String?> transcribeVoiceExpense(String audioPath) async {
+    try {
+      var request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/process-voice-expense'));
+      
       request.files.add(
         await http.MultipartFile.fromPath(
-          'receipt', // This 'field' name must match what the Flask server expects: `request.files['receipt']`
-          imagePath,
-          // Provide the content type of the file.
-          contentType: MediaType('image', 'jpeg'), // Assuming JPEG, can also be 'png'
+          'audio', // This field name must match the key expected by the Flask server
+          audioPath,
+          contentType: MediaType('audio', 'wav'), // Specify the audio format
         )
       );
 
-      print("Uploading receipt image to backend...");
-      // 3. Send the request and wait for the response.
-      // Use a longer timeout as uploads and cloud processing can take time.
-      var streamedResponse = await request.send().timeout(const Duration(seconds: 30));
-      
-      // 4. Convert the streamed response back into a regular HTTP response.
+      print("Uploading voice recording for transcription...");
+      var streamedResponse = await request.send().timeout(const Duration(seconds: 20));
       var response = await http.Response.fromStream(streamedResponse);
-
-      print("Backend responded with status: ${response.statusCode}");
+      print("Backend responded to transcription request with status: ${response.statusCode}");
 
       if (response.statusCode == 200) {
-        // Success! The backend did all the work and returned the final data.
-        return json.decode(response.body);
+        final body = json.decode(response.body);
+        // The backend returns a simple JSON: {'transcribed_text': 'the text'}
+        // We return just the text string.
+        return body['transcribed_text'];
       } else {
-        // The backend returned an error.
-        print("Failed to analyze receipt image: ${response.body}");
+        print("Failed to transcribe voice: ${response.body}");
         return null;
       }
+    } on TimeoutException {
+      print('Error: Voice transcription timed out.');
+      return null;
+    } on http.ClientException catch (e) {
+      print('Error connecting to AI service for voice transcription: $e.');
+      return null;
     } catch (e) {
-      // This catches network errors during the upload.
-      print("Error uploading/analyzing receipt image: $e");
+      print("An unexpected error occurred during voice transcription: $e");
       return null;
     }
   }
