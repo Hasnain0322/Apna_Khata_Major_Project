@@ -1,0 +1,590 @@
+{
+    "intents": [
+        {
+            "tag": "greeting",
+            "patterns": [
+                "Hi",
+                "Hello",
+                "Hey there",
+                "Good morning",
+                "What's up?",
+                "Is anyone there?",
+                "Hey, chatbot!",
+                "Yo",
+                "Hi bot"
+            ],
+            "responses": [
+                "Hello! How can I help you manage your finances today?",
+                "Hi there! Ready to track some expenses? Ask me anything.",
+                "Hey! I'm your friendly expense assistant. What's on your mind?"
+            ]
+        },
+        {
+            "tag": "goodbye",
+            "patterns": [
+                "Bye",
+                "Goodbye",
+                "See you later",
+                "Catch you later",
+                "I have to go",
+                "Talk to you soon",
+                "I'm leaving now",
+                "Farewell"
+            ],
+            "responses": [
+                "Goodbye! Happy tracking!",
+                "Talk to you later! Don't hesitate to come back if you have more questions.",
+                "Bye for now! Have a great day."
+            ]
+        },
+        {
+            "tag": "thanks",
+            "patterns": [
+                "Thanks",
+                "Thank you",
+                "Thanks a lot",
+                "Much appreciated",
+                "Thanks for your help",
+                "Thank you so much",
+                "That was really helpful",
+                "I appreciate it"
+            ],
+            "responses": [
+                "You're very welcome!",
+                "Happy to help! Is there anything else you need?",
+                "My pleasure! Let me know if another question comes up."
+            ]
+        },
+        {
+            "tag": "about_bot",
+            "patterns": [
+                "Who are you?",
+                "What are you?",
+                "Are you a bot or human?",
+                "Tell me about yourself",
+                "What is your name?",
+                "Are you an AI?"
+            ],
+            "responses": [
+                "I'm a friendly chatbot assistant, here to help you navigate this expense tracking app.",
+                "You can think of me as your personal guide to managing your finances with this app!"
+            ]
+        },
+        {
+            "tag": "options",
+            "patterns": [
+                "What can you do?",
+                "How can you help me?",
+                "What kind of questions can I ask?",
+                "What are my options here?",
+                "Show me what you know",
+                "What are your capabilities?",
+                "What features can you explain?"
+            ],
+            "responses": [
+                "I can help with login, registration, adding expenses, and navigating the app. What would you like to know?",
+                "You can ask me for help with any of the app's features! For example, try asking 'How do I view my reports?'"
+            ]
+        },
+        {
+            "tag": "add_expense_help",
+            "patterns": [
+                "How do I add a new expense?",
+                "Where can I input my spending?",
+                "What's the process for adding an expense?",
+                "How does the AI analysis work?",
+                "What should I type in the text box?",
+                "Tell me how to use the 'Analyze Expense' feature",
+                "How to log a new transaction?",
+                "Guide me through adding an expense.",
+                "Explain the add expense screen."
+            ],
+            "responses": [
+                "It's super easy! From the home screen, tap 'Text Entry'. Then, just type a simple sentence like 'Paid 150 for lunch' and tap the 'Analyze Expense' button.",
+                "To add an expense with text, tap the 'Text Entry' button on the home screen. Describe your expense in the text box, and let the AI do the heavy lifting for you."
+            ]
+        },
+        {
+            "tag": "edit_expense_help",
+            "patterns": [
+                "The analysis was wrong, can I change it?",
+                "How do I edit the expense details?",
+                "Can I correct the item or amount?",
+                "The category is incorrect, how can I fix it?",
+                "What does the 'Edit' button do?",
+                "How to modify the analyzed expense before saving?",
+                "Is it possible to change the AI's suggestion?",
+                "The AI got it wrong, what now?"
+            ],
+            "responses": [
+                "Of course! If the AI's analysis isn't quite right, just tap the 'Edit' button. That will open a dialog where you can correct all the details.",
+                "You have full control. After the app analyzes an expense, you'll see an 'Edit' button. Use that to make any corrections before you save."
+            ]
+        },
+        {
+            "tag": "save_expense_help",
+            "patterns": [
+                "What happens when I confirm an expense?",
+                "Where is my expense data saved?",
+                "How do I save the confirmed details?",
+                "What does 'Confirm & Save' do?",
+                "Is the expense saved automatically?",
+                "How to finalize saving an expense?"
+            ],
+            "responses": [
+                "Once you're happy with the analyzed details, just hit 'Confirm & Save'. This will add the transaction permanently to your expense log.",
+                "Ready to save? Tapping 'Confirm & Save' finalizes the entry and adds it to your 'My Expenses' list."
+            ]
+        },
+        {
+            "tag": "troubleshooting_analysis",
+            "patterns": [
+                "The analysis failed, what should I do?",
+                "I'm getting an error message when analyzing.",
+                "It says 'Could not process the expense'.",
+                "Why isn't the 'Analyze Expense' button working?",
+                "The analyze button is grayed out.",
+                "The AI feature is broken."
+            ],
+            "responses": [
+                "Hmm, if the analysis is failing, it could be a connection issue. First, make sure the Python server is running on your computer.",
+                "If you're getting an error, try rephrasing the expense to be more specific, like 'Paid 200 for groceries' instead of just 'groceries'."
+            ]
+        },
+        {
+            "tag": "edit_dialog_fields",
+            "patterns": [
+                "How do I change the item name in the edit screen?",
+                "Can I modify the amount after analysis?",
+                "The category is wrong, how do I select a different one?",
+                "How to correct the expense details?",
+                "Can I change the values in the popup?",
+                "How do I use the category dropdown?",
+                "How to change the text in the edit box?"
+            ],
+            "responses": [
+                "Absolutely. In the 'Edit Expense' pop-up, you can tap on the 'Item' and 'Amount' fields to type in new values. You can also tap the 'Category' dropdown to pick a new one.",
+                "You can easily change any of the details in the edit dialog. Just tap on a field to update it."
+            ]
+        },
+        {
+            "tag": "edit_dialog_save",
+            "patterns": [
+                "What happens when I click 'Save Changes'?",
+                "How do I confirm the edits I made?",
+                "Will my changes be saved?",
+                "What does the save button do in the edit dialog?",
+                "How to apply my corrections?"
+            ],
+            "responses": [
+                "Once you hit 'Save Changes', the app will lock in your edits and update the details on the previous screen. You're all set to confirm and save!",
+                "Tapping 'Save Changes' confirms the corrections you made in the pop-up. The app will then be ready for you to permanently save the transaction."
+            ]
+        },
+        {
+            "tag": "edit_dialog_cancel",
+            "patterns": [
+                "How do I cancel my edits?",
+                "What happens if I press 'Cancel'?",
+                "I don't want to save my changes, what do I do?",
+                "Will my changes be discarded if I cancel?",
+                "How to exit the edit popup without saving?"
+            ],
+            "responses": [
+                "Don't worry, tapping 'Cancel' is like an escape button. It will close the pop-up and none of your edits will be saved.",
+                "If you hit 'Cancel', any changes you made in the edit dialog are safely discarded."
+            ]
+        },
+        {
+            "tag": "edit_dialog_validation",
+            "patterns": [
+                "Why can't I save my changes?",
+                "It's not letting me save the expense.",
+                "I see an error message like 'Please enter an item'.",
+                "The save button isn't working.",
+                "Why is there a red error message?"
+            ],
+            "responses": [
+                "If you can't save, the app is likely trying to prevent an error. Please make sure every field is filled out and that the 'Amount' contains a valid number.",
+                "Seeing a red error? It means a field needs to be fixed. Usually, it's a missing item name or an invalid amount."
+            ]
+        },
+        {
+            "tag": "view_expenses_help",
+            "patterns": [
+                "How can I see my past expenses?",
+                "Where is my expense history?",
+                "Show me a list of my spending.",
+                "What does the 'My Expenses' screen show?",
+                "How are my expenses displayed?",
+                "Where do I find my transaction log?",
+                "Explain the expense list screen."
+            ],
+            "responses": [
+                "The 'My Expenses' screen is your financial diary! It shows a complete history of all the expenses you've saved, with the most recent ones at the top.",
+                "You can find all your past spending on the 'My Expenses' screen. It's a list that shows every transaction you've recorded."
+            ]
+        },
+        {
+            "tag": "delete_expense_help",
+            "patterns": [
+                "How do I delete an expense from the list?",
+                "Can I remove an entry from my history?",
+                "I made a mistake, how to delete an expense?",
+                "Is there a delete button?",
+                "How to erase a transaction?"
+            ],
+            "responses": [
+                "Currently, deleting an expense directly from the list isn't a feature. This is a great suggestion for a future update, though!",
+                "This screen is for viewing your history. The ability to delete expenses from this list hasn't been added yet."
+            ]
+        },
+        {
+            "tag": "edit_from_list_help",
+            "patterns": [
+                "How do I edit an expense from this list?",
+                "Can I tap on an expense to change it?",
+                "I need to correct an expense in my history.",
+                "Is it possible to edit a saved expense?"
+            ],
+            "responses": [
+                "Right now, you can only view expenses on this screen. Editing an expense after it has been saved isn't currently possible.",
+                "To keep your history accurate, saved expenses can't be edited."
+            ]
+        },
+        {
+            "tag": "troubleshoot_view_expenses",
+            "patterns": [
+                "Why is the expenses screen showing an error?",
+                "I see an error about 'Firestore Security Rules'.",
+                "The screen is blank and says an error occurred.",
+                "Why is the screen just a spinning circle?",
+                "The expense list won't load.",
+                "I'm stuck on the loading indicator."
+            ],
+            "responses": [
+                "If you're seeing a spinning circle, the app is currently loading your data from the cloud. If it's stuck or shows an error, it could be due to a poor internet connection.",
+                "An error on this screen usually points to a problem with connecting to the database. Please check your internet connection."
+            ]
+        },
+        {
+            "tag": "empty_expenses_list_help",
+            "patterns": [
+                "My expenses list is empty.",
+                "Why does it say 'No expenses found'?",
+                "I added an expense but it's not showing up.",
+                "Where are my saved transactions?"
+            ],
+            "responses": [
+                "It looks like your expense history is empty! You can start by adding your first expense from the main screen.",
+                "If you've just saved an expense and it's not appearing, try waiting a moment for the list to refresh from the database."
+            ]
+        },
+        {
+            "tag": "register_help",
+            "patterns": [
+                "How do I sign up?",
+                "How do I create a new account?",
+                "What is the registration process?",
+                "Guide me through creating an account.",
+                "I want to make a new profile."
+            ],
+            "responses": [
+                "To create a new account, simply fill in your email address and a secure password on the 'Register' screen, then tap the 'Register' button.",
+                "Signing up is easy! Just enter your email and a password on the registration page to get started."
+            ]
+        },
+        {
+            "tag": "register_password_rules",
+            "patterns": [
+                "What are the password requirements?",
+                "My password isn't working.",
+                "Is there a minimum password length?",
+                "It says my password must be 6+ characters.",
+                "What kind of password should I use?"
+            ],
+            "responses": [
+                "For your security, your password must be at least 6 characters long. It's a good idea to mix letters, numbers, and symbols!",
+                "Please make sure your password is 6 characters or longer. This helps keep your account secure."
+            ]
+        },
+        {
+            "tag": "register_email_rules",
+            "patterns": [
+                "What kind of email should I use?",
+                "Does my email need to be a real one?",
+                "Can I use any email to register?"
+            ],
+            "responses": [
+                "You'll need to use a valid email address that you can access. This is important in case you need to recover your account later.",
+                "Just type in your email address in the 'Email' field. Make sure it's a real email address!"
+            ]
+        },
+        {
+            "tag": "register_success_help",
+            "patterns": [
+                "I just registered, what's the next step?",
+                "It says registration successful, what now?",
+                "After I register, do I log in?"
+            ],
+            "responses": [
+                "Congratulations on creating your account! The next step is to head back to the login screen and sign in with your new email and password.",
+                "That's great! After a successful registration, you can now log in to the app and start tracking your expenses."
+            ]
+        },
+        {
+            "tag": "register_failure_help",
+            "patterns": [
+                "Registration failed, why?",
+                "It says my email is already in use.",
+                "I can't create an account.",
+                "The register button gives me an error."
+            ],
+            "responses": [
+                "If your registration failed, it's most likely because that email address is already registered. Try logging in instead, or use a different email address.",
+                "Hmm, there might be an issue. Please double-check that you've entered a valid email. If you have, it's possible that an account with that email already exists."
+            ]
+        },
+        {
+            "tag": "navigate_to_login",
+            "patterns": [
+                "I already have an account.",
+                "How do I get to the login page from here?",
+                "Where do I go if I already have an account?"
+            ],
+            "responses": [
+                "No problem at all. On the registration screen, just tap the link at the bottom that says 'Already have an account? Login' to go to the sign-in page.",
+                "If you already have an account, you can use the text button at the bottom of the screen to switch over to the login page."
+            ]
+        },
+        {
+            "tag": "login_help",
+            "patterns": [
+                "How do I sign in?",
+                "What's the process for logging in?",
+                "I need to log into my account.",
+                "How do I access my profile?",
+                "Explain the login screen."
+            ],
+            "responses": [
+                "To sign in, just enter the email and password you used to register, then tap the 'Sign In' button.",
+                "Welcome back! Enter your credentials on the login screen to access your account."
+            ]
+        },
+        {
+            "tag": "login_failure_help",
+            "patterns": [
+                "I can't log in.",
+                "It says 'Could not sign in with those credentials'.",
+                "My email or password is not working.",
+                "Why is my login failing?",
+                "Invalid credentials error.",
+                "I'm getting a login error."
+            ],
+            "responses": [
+                "Hmm, that didn't work. This error usually means the email or password you entered doesn't match our records. Please double-check them and try again.",
+                "If you're seeing a 'Could not sign in' error, it's a good idea to check for typos in both your email and password. Case matters in passwords!"
+            ]
+        },
+        {
+            "tag": "login_password_help",
+            "patterns": [
+                "I forgot my password.",
+                "How do I reset my password?",
+                "Is there a forgot password link?",
+                "I can't remember my password, what do I do?",
+                "Lost my password."
+            ],
+            "responses": [
+                "I noticed there isn't a 'Forgot Password' link on the login screen. For now, please try to remember your password.",
+                "It looks like a password reset feature hasn't been added to the app yet. If you're completely stuck, you might consider registering again with a different email."
+            ]
+        },
+        {
+            "tag": "navigate_to_register",
+            "patterns": [
+                "I don't have an account yet.",
+                "How do I create an account from the login page?",
+                "Where is the sign-up page?",
+                "I need to register first."
+            ],
+            "responses": [
+                "No account yet? No problem! Just tap the 'Don't have an account? Register' link at the bottom of the screen to get started.",
+                "If you're a new user, you can tap the text button at the bottom to go to the registration page and create your account."
+            ]
+        },
+        {
+            "tag": "home_screen_logout",
+            "patterns": [
+                "How do I log out?",
+                "Where is the sign out button?",
+                "What happens if I press the logout icon?",
+                "How do I end my session?",
+                "Where can I find the logout option?"
+            ],
+            "responses": [
+                "To sign out, just tap the logout icon in the top-right corner of the Home screen. A confirmation box will pop up to make sure you don't log out by accident.",
+                "You can log out by tapping the icon that looks like a person walking out of a door at the top of the Home screen."
+            ]
+        },
+        {
+            "tag": "home_screen_search",
+            "patterns": [
+                "How does the search bar work?",
+                "Can I search for a specific expense?",
+                "What can I type in the search box?",
+                "Explain the search feature on the home page."
+            ],
+            "responses": [
+                "The search bar at the top of the Home screen lets you find specific expenses. Currently, it's a placeholder for a future update!",
+                "You can use the search bar to look for past transactions. This feature is still under development but will be very powerful soon!"
+            ]
+        },
+        {
+            "tag": "home_screen_actions",
+            "patterns": [
+                "What do the buttons on the home screen do?",
+                "Explain the main action buttons.",
+                "What are the grid buttons for?"
+            ],
+            "responses": [
+                "The home screen has several action buttons! 'Text Entry' is for manually adding an expense. The others, like 'Scan Receipt' and 'Voice to Text', are exciting features planned for future updates.",
+                "These buttons are your main shortcuts. Use 'Text Entry' to start adding an expense. The other buttons will eventually let you add expenses in different ways, like by scanning or speaking."
+            ]
+        },
+        {
+            "tag": "scan_receipt_help",
+            "patterns": [
+                "Tell me about the 'Scan Receipt' feature.",
+                "How do I scan a receipt with my camera?",
+                "What does the receipt icon do?"
+            ],
+            "responses": [
+                "The 'Scan Receipt' feature will be a powerful tool! It will let you use your phone's camera to automatically capture all the details from a physical receipt.",
+                "This is a planned feature that will save you a lot of time. Soon, you'll be able to just take a picture of a receipt to log an expense."
+            ]
+        },
+        {
+            "tag": "parse_pdf_help",
+            "patterns": [
+                "How do I use the 'Parse PDF' button?",
+                "Can the app read expenses from a PDF file?",
+                "What does the PDF button do?"
+            ],
+            "responses": [
+                "The 'Parse PDF' button will allow you to upload a PDF statement from your bank or a service, and the app will automatically find and import the transactions for you.",
+                "This feature is coming soon! It will be perfect for importing expenses from e-receipts or digital statements you receive as PDFs."
+            ]
+        },
+        {
+            "tag": "voice_entry_help",
+            "patterns": [
+                "How do I add an expense using my voice?",
+                "What is 'Voice to Text' for?",
+                "How do I use the microphone button?"
+            ],
+            "responses": [
+                "The 'Voice to Text' button will let you add an expense just by speaking. For example, you could say 'Paid 300 for a movie ticket' and the app would understand.",
+                "This will be a quick and hands-free way to log your spending. Just tap the microphone and speak your expense."
+            ]
+        },
+        {
+            "tag": "text_entry_help",
+            "patterns": [
+                "Which button is for text entry?",
+                "How to add an expense manually from home?",
+                "Where is the button to type in my expense?"
+            ],
+            "responses": [
+                "The 'Text Entry' button is your primary way to add an expense. Tapping it will take you to the 'Add Expense' screen where you can describe your purchase for the AI to analyze.",
+                "Use the 'Text Entry' button when you want to manually type in a new expense. It's the most direct way to get started."
+            ]
+        },
+        {
+            "tag": "reports_help",
+            "patterns": [
+                "How do I see reports?",
+                "Tell me about the different reports available.",
+                "How to generate a monthly or yearly report?",
+                "Explain the reports section."
+            ],
+            "responses": [
+                "The 'Reports' section gives you powerful insights into your spending habits. You can generate a Monthly, Yearly, or even a Custom date range report.",
+                "Want to see where your money is going? Head to the 'Reports' section on the Home screen to get a detailed breakdown of your expenses over different time periods."
+            ]
+        },
+        {
+            "tag": "profile_settings_help",
+            "patterns": [
+                "Where do I find my profile and settings?",
+                "How can I manage my personal information?",
+                "Where are the app settings?"
+            ],
+            "responses": [
+                "You can manage your personal details and app preferences using the 'Profile' and 'Settings' buttons at the bottom of the Home screen.",
+                "The 'Personal' section contains your 'Profile' and 'Settings', allowing you to customize your experience and manage your account info."
+            ]
+        },
+        {
+            "tag": "navigation_main",
+            "patterns": [
+                "How do I get around the app?",
+                "What do the buttons at the bottom do?",
+                "Explain the navigation bar.",
+                "How to switch between sections?"
+            ],
+            "responses": [
+                "You can easily get around the app using the navigation bar at the very bottom of the screen. Each icon takes you to a major section.",
+                "The main way to navigate is the bottom bar. It has four icons: Home, Expenses, Reports, and Profile. Just tap one to switch screens."
+            ]
+        },
+        {
+            "tag": "navigation_home",
+            "patterns": [
+                "How do I get to the home screen?",
+                "Where is the main menu?",
+                "What does the house icon do?"
+            ],
+            "responses": [
+                "To get back to the main dashboard, just tap the 'Home' icon, the one that looks like a little house, in the bottom navigation bar.",
+                "The 'Home' button in the bottom left corner will always take you back to the main screen with all the action buttons."
+            ]
+        },
+        {
+            "tag": "navigation_expenses",
+            "patterns": [
+                "How do I view my expense list?",
+                "Where do I find my transaction history?",
+                "Which button is for viewing all expenses?"
+            ],
+            "responses": [
+                "You can see your full transaction history by tapping the 'Expenses' tab at the bottom. It's the one that looks like a long receipt.",
+                "To view a list of all your past expenses, tap the 'Expenses' icon in the bottom navigation bar."
+            ]
+        },
+        {
+            "tag": "navigation_reports",
+            "patterns": [
+                "Where can I see my charts?",
+                "How to get to the reports page?",
+                "Which icon is for reports?"
+            ],
+            "responses": [
+                "For all your charts and financial insights, tap the 'Reports' icon, the one that looks like a bar chart, in the bottom navigation bar.",
+                "Want to see your spending visualized? The 'Reports' tab at the bottom is where you'll find all the graphs."
+            ]
+        },
+        {
+            "tag": "navigation_profile",
+            "patterns": [
+                "How do I get to my profile screen?",
+                "Where are the account settings located?",
+                "What does the person icon at the bottom do?"
+            ],
+            "responses": [
+                "Your account information and app settings can be found on the 'Profile' screen. Just tap the person icon in the bottom right corner.",
+                "To manage your profile, tap the 'Profile' icon in the bottom navigation bar."
+            ]
+        }
+    ]
+}
