@@ -1,10 +1,18 @@
+// lib/screens/home_screen.dart
+
 import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:speech_to_text/speech_to_text.dart';
+
 import 'package:expense_tracker/models/expense_model.dart';
 import 'package:expense_tracker/models/user_profile_model.dart';
 import 'package:expense_tracker/screens/add_expense_screen.dart';
 import 'package:expense_tracker/screens/expenses_screen.dart';
 import 'package:expense_tracker/screens/profile_screen.dart';
 import 'package:expense_tracker/screens/reports_screen.dart';
+import 'package:expense_tracker/screens/chat_screen.dart';
 import 'package:expense_tracker/services/ai_service.dart';
 import 'package:expense_tracker/services/auth_service.dart';
 import 'package:expense_tracker/services/firestore_service.dart';
@@ -12,13 +20,10 @@ import 'package:expense_tracker/utils/app_theme.dart';
 import 'package:expense_tracker/widgets/balance_card.dart';
 import 'package:expense_tracker/widgets/fade-page-route.dart';
 import 'package:expense_tracker/widgets/transaction_tile.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:speech_to_text/speech_to_text.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -29,7 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _aiService = AiService();
   final _firestoreService = FirestoreService();
 
-  // --- Speech-to-Text State Variables ---
+  // Speech-to-Text
   final SpeechToText _speechToText = SpeechToText();
   bool _speechEnabled = false;
 
@@ -39,109 +44,125 @@ class _HomeScreenState extends State<HomeScreen> {
     _initSpeech();
   }
 
-  /// Initialize the speech recognition service once.
-  void _initSpeech() async {
+  Future<void> _initSpeech() async {
     try {
       _speechEnabled = await _speechToText.initialize();
     } catch (e) {
-      print("Speech recognition failed to initialize: $e");
-    }
-    if (mounted) {
-      setState(() {});
+      debugPrint("Speech recognition init failed: $e");
+    } finally {
+      if (mounted) setState(() {});
     }
   }
 
-  // --- THIS IS THE NEW, CORRECTED, AND COMPATIBLE VOICE LOGIC ---
+  // Voice input flow: listens, shows dialog, on final text => open AddExpenseScreen with initialText
   Future<void> _handleVoiceInput() async {
     if (!_speechEnabled) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Speech recognition not available.')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Speech recognition not available.',
+          ),
+        ),
+      );
       return;
     }
 
     final completer = Completer<String?>();
     String recognizedWords = "";
 
-    // Start listening right away.
-    _speechToText.listen(
+    await _speechToText.listen(
       onResult: (result) {
-        // This is called continuously. We update a variable with the latest text.
         recognizedWords = result.recognizedWords;
-        
-        // When the speech engine is confident the user is done, it sets this flag.
-        if (result.finalResult) {
-          // If our completer hasn't been finished yet, finish it with the final text.
-          if (!completer.isCompleted) {
-            completer.complete(recognizedWords);
-          }
+        if (result.finalResult && !completer.isCompleted) {
+          completer.complete(recognizedWords);
         }
       },
-      // These help the engine know when to stop automatically.
       listenFor: const Duration(seconds: 15),
       pauseFor: const Duration(seconds: 3),
     );
 
-    // Show the dialog. It will display the live recognized words.
-    await showDialog(
+    // Show a dialog while listening; it will close when completer completes
+    if (!mounted) return;
+    await showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {
         return ListeningDialog(
           speechToText: _speechToText,
-          // This future will complete when the speech is final, closing the dialog.
           resultFuture: completer.future,
           onCancel: () {
-            // If the user cancels, stop listening and complete with null.
             _speechToText.stop();
-            if (!completer.isCompleted) {
+            if (!completer.isCompleted)
               completer.complete(null);
-            }
             Navigator.of(dialogContext).pop();
           },
         );
       },
     );
 
-    // After the dialog closes, get the final result from the completer.
-    final finalResult = await completer.future;
-    
-    if (finalResult != null && finalResult.isNotEmpty) {
+    final finalText = await completer.future;
+    await _speechToText.stop();
+
+    if (finalText != null &&
+        finalText.trim().isNotEmpty &&
+        mounted) {
       Navigator.of(context).push(
-        FadePageRoute(page: AddExpenseScreen(initialText: finalResult)),
+        FadePageRoute(
+          child: AddExpenseScreen(
+            initialText: finalText.trim(),
+          ),
+        ),
       );
     }
   }
-  // --- END OF NEW LOGIC ---
 
   Future<void> _scanReceipt() async {
     final picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.camera);
+    final XFile? image = await picker.pickImage(
+      source: ImageSource.camera,
+    );
     if (image == null || !mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-          content: const Text('Uploading and analyzing receipt...'),
-          backgroundColor: Theme.of(context).colorScheme.onBackground),
+        content: const Text(
+          'Uploading and analyzing receipt...',
+        ),
+        backgroundColor:
+            Theme.of(context).colorScheme.onBackground,
+      ),
     );
-    final result = await _aiService.analyzeReceiptImage(image.path);
+
+    final result = await _aiService.analyzeReceiptImage(
+      image.path,
+    );
+
     if (!mounted) return;
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
     if (result != null) {
-      Navigator.of(context)
-          .push(FadePageRoute(page: AddExpenseScreen(initialData: result)));
+      Navigator.of(context).push(
+        FadePageRoute(
+          child: AddExpenseScreen(initialData: result),
+        ),
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content:
-                const Text('Could not process your request. Please try again.'),
-            backgroundColor: Theme.of(context).colorScheme.error),
+          content: const Text(
+            'Could not process your request. Please try again.',
+          ),
+          backgroundColor:
+              Theme.of(context).colorScheme.error,
+        ),
       );
     }
   }
 
-  String _greetingName() {
+  String _greetingFallback() {
     final user = _auth.currentUser;
-    // Use display name from Firestore profile as the primary source
-    return user?.displayName ?? 'Friend'; // Fallback
+    return user?.displayName ?? 'Friend';
   }
 
   double _monthlyTotal(List<Expense> expenses) {
@@ -151,32 +172,37 @@ class _HomeScreenState extends State<HomeScreen> {
           final d = e.timestamp.toDate();
           return d.year == now.year && d.month == now.month;
         })
-        .fold<double>(0.0, (sum, e) => sum + e.amount);
+        .fold(0.0, (sum, e) => sum + e.amount);
   }
 
-  // Dialog for signing out
-  Future<void> _showSignOutDialog(BuildContext context) async {
+  Future<void> _showSignOutDialog(
+    BuildContext context,
+  ) async {
     final theme = Theme.of(context);
     return showDialog<void>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Sign Out?'),
-          content: const Text('Are you sure you want to sign out?'),
-          actions: <Widget>[
+          content: const Text(
+            'Are you sure you want to sign out?',
+          ),
+          actions: [
             TextButton(
+              onPressed:
+                  () => Navigator.of(dialogContext).pop(),
               child: const Text('Cancel'),
-              onPressed: () => Navigator.of(dialogContext).pop(),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                  backgroundColor: theme.colorScheme.error,
-                  foregroundColor: theme.colorScheme.onError),
-              child: const Text('Sign Out'),
+                backgroundColor: theme.colorScheme.error,
+                foregroundColor: theme.colorScheme.onError,
+              ),
               onPressed: () {
                 Navigator.of(dialogContext).pop();
                 _authService.signOut();
               },
+              child: const Text('Sign Out'),
             ),
           ],
         );
@@ -184,44 +210,81 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // Open chat as a modal bottom sheet (no auto navigation from answers)
+  void _openChatbox() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder:
+          (ctx) => ChatboxBottomSheet(
+            firestoreService: _firestoreService,
+          ),
+    );
+  }
+
   Widget _header(BuildContext context) {
     final theme = Theme.of(context);
     final tokens = theme.extension<AppTokens>()!;
-
-    return StreamBuilder<UserProfile>(
+    return StreamBuilder<UserProfile?>(
       stream: _firestoreService.getUserProfile(),
       builder: (context, snapshot) {
-        final displayName = snapshot.data?.displayName ?? _greetingName();
+        final displayName =
+            snapshot.data?.displayName ??
+            _greetingFallback();
         final photoURL = snapshot.data?.photoURL;
-        final avatarChild = photoURL != null
-            ? CircleAvatar(backgroundImage: NetworkImage(photoURL), radius: 18)
-            : Icon(Icons.person, color: tokens.iconColor);
+
+        Widget avatarChild;
+        if (photoURL != null && photoURL.isNotEmpty) {
+          avatarChild = CircleAvatar(
+            backgroundImage: NetworkImage(photoURL),
+            radius: 18,
+          );
+        } else {
+          avatarChild = Icon(
+            Icons.person,
+            color: tokens.iconColor,
+          );
+        }
 
         return Row(
           children: [
             GestureDetector(
               onTap: () {
-                Navigator.of(context)
-                    .push(FadePageRoute(page: const ProfileScreen()));
+                Navigator.of(context).push(
+                  FadePageRoute(
+                    child: const ProfileScreen(),
+                  ),
+                );
               },
               child: CircleAvatar(
                 radius: 18,
-                backgroundColor: tokens.iconColor.withOpacity(0.12),
+                backgroundColor: tokens.iconColor
+                    .withOpacity(0.12),
                 child: avatarChild,
               ),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
                 children: [
-                  Text('Hi, $displayName!', style: theme.textTheme.titleLarge),
-                  Text('Manage your expenses smartly',
-                      style: theme.textTheme.bodyMedium),
+                  Text(
+                    'Hi, $displayName!',
+                    style: theme.textTheme.titleLarge,
+                  ),
+                  Text(
+                    'Manage your expenses smartly',
+                    style: theme.textTheme.bodyMedium,
+                  ),
                 ],
               ),
             ),
-            Icon(Icons.chat_bubble_outline_rounded, color: tokens.iconColor),
+            Icon(
+              Icons.chat_bubble_outline_rounded,
+              color: tokens.iconColor,
+            ),
             const SizedBox(width: 12),
             PopupMenuButton<String>(
               onSelected: (value) {
@@ -229,13 +292,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   _showSignOutDialog(context);
                 }
               },
-              icon: Icon(Icons.settings_outlined, color: tokens.iconColor),
-              itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                const PopupMenuItem<String>(
-                  value: 'signOut',
-                  child: Text('Sign Out'),
-                ),
-              ],
+              icon: Icon(
+                Icons.settings_outlined,
+                color: tokens.iconColor,
+              ),
+              itemBuilder:
+                  (BuildContext context) => const [
+                    PopupMenuItem(
+                      value: 'signOut',
+                      child: Text('Sign Out'),
+                    ),
+                  ],
             ),
           ],
         );
@@ -244,9 +311,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _actionsRow(BuildContext context) {
-    final tokens = Theme.of(context).extension<AppTokens>()!;
     final theme = Theme.of(context);
-    Widget btn(IconData icon, String label, VoidCallback onTap) {
+    final tokens = theme.extension<AppTokens>()!;
+
+    Widget btn(
+      IconData icon,
+      String label,
+      VoidCallback onTap,
+    ) {
       return Expanded(
         child: Column(
           children: [
@@ -259,9 +331,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: Colors.white,
                   shape: BoxShape.circle,
                   boxShadow:
-                      Theme.of(context).extension<AppShadows>()!.cardShadow,
+                      Theme.of(
+                        context,
+                      ).extension<AppShadows>()!.cardShadow,
                   border: Border.all(
-                      color: theme.colorScheme.onSurface.withOpacity(0.06)),
+                    color: theme.colorScheme.onSurface
+                        .withOpacity(0.06),
+                  ),
                 ),
                 child: Icon(icon, color: tokens.iconColor),
               ),
@@ -275,15 +351,31 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Row(
       children: [
-        btn(Icons.payment, 'Expenses', () => Navigator.of(context).push(FadePageRoute(page: const ExpensesScreen()))),
+        btn(
+          Icons.payment,
+          'Expenses',
+          () => Navigator.of(context).push(
+            FadePageRoute(child: const ExpensesScreen()),
+          ),
+        ),
         const SizedBox(width: 12),
-        btn(Icons.analytics, 'Analysis',() => Navigator.of(context).push(FadePageRoute(page: const ReportsScreen()))),
+        btn(
+          Icons.analytics,
+          'Analysis',
+          () => Navigator.of(context).push(
+            FadePageRoute(child: const ReportsScreen()),
+          ),
+        ),
         const SizedBox(width: 12),
         btn(Icons.download_rounded, 'Reports', () {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: const Text('Reports coming soon'),
-                backgroundColor: Theme.of(context).colorScheme.onBackground),
+              content: const Text('Reports coming soon'),
+              backgroundColor:
+                  Theme.of(
+                    context,
+                  ).colorScheme.onBackground,
+            ),
           );
         }),
       ],
@@ -295,31 +387,45 @@ class _HomeScreenState extends State<HomeScreen> {
     required String label,
     required VoidCallback onTap,
   }) {
-    final tokens = Theme.of(context).extension<AppTokens>()!;
+    final tokens =
+        Theme.of(context).extension<AppTokens>()!;
     final theme = Theme.of(context);
+
     return Flexible(
-      flex: 1,
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
+          padding: const EdgeInsets.symmetric(
+            vertical: 20,
+            horizontal: 8,
+          ),
           decoration: BoxDecoration(
             color: tokens.primaryAccent,
             borderRadius: BorderRadius.circular(18),
-            boxShadow: Theme.of(context).extension<AppShadows>()!.cardShadow,
+            boxShadow:
+                Theme.of(
+                  context,
+                ).extension<AppShadows>()!.cardShadow,
             border: Border.all(
-                color: theme.colorScheme.onSurface.withOpacity(0.06)),
+              color: theme.colorScheme.onSurface
+                  .withOpacity(0.06),
+            ),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: tokens.primaryText, size: 28),
+              Icon(
+                icon,
+                color: tokens.primaryText,
+                size: 28,
+              ),
               const SizedBox(height: 8),
               Text(
                 label,
                 textAlign: TextAlign.center,
-                style: theme.textTheme.bodyLarge
-                    ?.copyWith(color: tokens.primaryText),
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: tokens.primaryText,
+                ),
               ),
             ],
           ),
@@ -328,8 +434,54 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildChatbotFAB(BuildContext context) {
+    final tokens =
+        Theme.of(context).extension<AppTokens>()!;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16, right: 4),
+      child: FloatingActionButton.extended(
+        onPressed: _openChatbox,
+        backgroundColor: tokens.primaryAccent,
+        foregroundColor: tokens.primaryText,
+        elevation: 0,
+        highlightElevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(28),
+          side: BorderSide(
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withOpacity(0.06),
+          ),
+        ),
+        icon: Container(
+          padding: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            color: tokens.primaryText.withOpacity(0.08),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            Icons.chat_bubble_outline_rounded,
+            size: 20,
+            color: tokens.primaryText,
+          ),
+        ),
+        label: Text(
+          'Ask AI',
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(
+            color: tokens.primaryText,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -343,14 +495,20 @@ class _HomeScreenState extends State<HomeScreen> {
           child: StreamBuilder<List<Expense>>(
             stream: _firestoreService.getExpensesStream(),
             builder: (context, snapshot) {
-              final expenses = snapshot.data ?? [];
+              final expenses = snapshot.data ?? <Expense>[];
               final monthly = _monthlyTotal(expenses);
               final latest = expenses.take(3).toList();
 
               return SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                padding: const EdgeInsets.fromLTRB(
+                  16,
+                  12,
+                  16,
+                  24,
+                ),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.stretch,
                   children: [
                     _header(context),
                     const SizedBox(height: 16),
@@ -358,22 +516,26 @@ class _HomeScreenState extends State<HomeScreen> {
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(
+                          24,
+                        ),
                         boxShadow:
-                            Theme.of(context).extension<AppShadows>()!.cardShadow,
+                            Theme.of(context)
+                                .extension<AppShadows>()!
+                                .cardShadow,
                         border: Border.all(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withOpacity(0.06)),
+                          color: theme.colorScheme.onSurface
+                              .withOpacity(0.06),
+                        ),
                       ),
                       child: Column(
                         children: [
                           BalanceCard(
-                              currency: 'INR',
-                              amount: monthly,
-                              subtitle: 'This month',
-                              delta: 421.03),
+                            currency: 'INR',
+                            amount: monthly,
+                            subtitle: 'This month',
+                            delta: 0.0,
+                          ),
                           const SizedBox(height: 12),
                           const Divider(height: 1),
                           const SizedBox(height: 12),
@@ -383,67 +545,107 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 18),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      mainAxisAlignment:
+                          MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Latest Transactions',
-                            style: Theme.of(context).textTheme.headlineMedium),
+                        Text(
+                          'Latest Transactions',
+                          style:
+                              Theme.of(
+                                context,
+                              ).textTheme.headlineMedium,
+                        ),
                         TextButton(
-                          onPressed: () => Navigator.of(context)
-                              .push(FadePageRoute(page: const ExpensesScreen())),
+                          onPressed:
+                              () => Navigator.of(
+                                context,
+                              ).push(
+                                FadePageRoute(
+                                  child:
+                                      const ExpensesScreen(),
+                                ),
+                              ),
                           style: TextButton.styleFrom(
                             foregroundColor:
-                                Theme.of(context).colorScheme.primary,
+                                Theme.of(
+                                  context,
+                                ).colorScheme.primary,
                           ),
                           child: const Text('See All'),
                         ),
                       ],
                     ),
                     const SizedBox(height: 6),
-                    if (snapshot.connectionState == ConnectionState.waiting)
+                    if (snapshot.connectionState ==
+                        ConnectionState.waiting)
                       const Center(
-                          child: Padding(
-                              padding: EdgeInsets.all(16),
-                              child: CircularProgressIndicator()))
+                        child: Padding(
+                          padding: EdgeInsets.all(16),
+                          child:
+                              CircularProgressIndicator(),
+                        ),
+                      )
                     else if (latest.isEmpty)
                       Padding(
                         padding: const EdgeInsets.all(16),
-                        child: Text('No recent transactions.',
-                            style: Theme.of(context).textTheme.bodyMedium),
+                        child: Text(
+                          'No recent transactions.',
+                          style:
+                              Theme.of(
+                                context,
+                              ).textTheme.bodyMedium,
+                        ),
                       )
                     else
                       Column(
                         children: List.generate(
                           latest.length,
                           (i) => Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 6),
-                            child: TransactionTile(expense: latest[i], index: i),
+                            padding:
+                                const EdgeInsets.symmetric(
+                                  vertical: 6,
+                                ),
+                            child: TransactionTile(
+                              expense: latest[i],
+                              index: i,
+                            ),
                           ),
                         ),
                       ),
                     const SizedBox(height: 18),
-                    Text('Add Expense By',
-                        style: Theme.of(context).textTheme.headlineMedium),
+                    Text(
+                      'Add Expense By',
+                      style:
+                          Theme.of(
+                            context,
+                          ).textTheme.headlineMedium,
+                    ),
                     const SizedBox(height: 10),
                     Row(
                       children: [
-                        // --- The Voice Entry button now calls the correct, robust handler ---
                         _inputMethodCard(
                           icon: Icons.mic,
                           label: 'Voice Entry',
                           onTap: _handleVoiceInput,
                         ),
-                        // ------------------------------------
                         const SizedBox(width: 12),
                         _inputMethodCard(
-                          icon: Icons.picture_as_pdf_outlined,
+                          icon:
+                              Icons.picture_as_pdf_outlined,
                           label: 'Import PDF',
                           onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            ScaffoldMessenger.of(
+                              context,
+                            ).showSnackBar(
                               SnackBar(
-                                  content: const Text('PDF import coming soon'),
-                                  backgroundColor: Theme.of(context)
-                                      .colorScheme
-                                      .onBackground),
+                                content: const Text(
+                                  'PDF import coming soon',
+                                ),
+                                backgroundColor:
+                                    Theme.of(context)
+                                        .colorScheme
+                                        .onBackground,
+                              ),
                             );
                           },
                         ),
@@ -451,8 +653,15 @@ class _HomeScreenState extends State<HomeScreen> {
                         _inputMethodCard(
                           icon: Icons.post_add_outlined,
                           label: 'Add Manually',
-                          onTap: () => Navigator.of(context)
-                              .push(FadePageRoute(page: const AddExpenseScreen())),
+                          onTap:
+                              () => Navigator.of(
+                                context,
+                              ).push(
+                                FadePageRoute(
+                                  child:
+                                      const AddExpenseScreen(),
+                                ),
+                              ),
                         ),
                       ],
                     ),
@@ -461,7 +670,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         onPressed: _scanReceipt,
-                        icon: const Icon(Icons.receipt_long),
+                        icon: const Icon(
+                          Icons.receipt_long,
+                        ),
                         label: const Text('Scan Receipt'),
                       ),
                     ),
@@ -472,12 +683,13 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
+      floatingActionButton: _buildChatbotFAB(context),
+      floatingActionButtonLocation:
+          FloatingActionButtonLocation.endFloat,
     );
   }
 }
 
-// --- NEW HELPER WIDGET FOR THE DIALOG ---
-// It's cleaner to put the dialog UI in its own widget.
 class ListeningDialog extends StatefulWidget {
   final SpeechToText speechToText;
   final VoidCallback onCancel;
@@ -491,7 +703,8 @@ class ListeningDialog extends StatefulWidget {
   });
 
   @override
-  State<ListeningDialog> createState() => _ListeningDialogState();
+  State<ListeningDialog> createState() =>
+      _ListeningDialogState();
 }
 
 class _ListeningDialogState extends State<ListeningDialog> {
@@ -500,11 +713,10 @@ class _ListeningDialogState extends State<ListeningDialog> {
   @override
   void initState() {
     super.initState();
-    // Listen to the speech engine's notifications to update the UI
-    widget.speechToText.statusListener = (status) => setState((){}); // Redraw on status change
-    widget.speechToText.errorListener = (error) => setState((){}); // Redraw on error
-    
-    // Auto-close dialog when future completes
+    widget.speechToText.statusListener =
+        (status) => setState(() {});
+    widget.speechToText.errorListener =
+        (error) => setState(() {});
     widget.resultFuture.whenComplete(() {
       if (mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
@@ -514,25 +726,35 @@ class _ListeningDialogState extends State<ListeningDialog> {
 
   @override
   Widget build(BuildContext context) {
-    // We get the live text directly from the speech engine's last result
     _currentWords = widget.speechToText.lastRecognizedWords;
-
     return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
       title: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.mic, color: Theme.of(context).colorScheme.primary),
+          Icon(
+            Icons.mic,
+            color: Theme.of(context).colorScheme.primary,
+          ),
           const SizedBox(width: 8),
           const Text('Listening...'),
         ],
       ),
       content: Text(
-        _currentWords.isEmpty ? "Say your expense, e.g., 'Groceries for 500'" : _currentWords,
+        _currentWords.isEmpty
+            ? "Say your expense, e.g., 'Groceries for 500'"
+            : _currentWords,
         textAlign: TextAlign.center,
         style: TextStyle(
           fontSize: 18,
-          color: _currentWords.isEmpty ? Colors.grey.shade600 : Theme.of(context).textTheme.bodyLarge?.color,
+          color:
+              _currentWords.isEmpty
+                  ? Colors.grey.shade600
+                  : Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.color,
         ),
       ),
       actionsAlignment: MainAxisAlignment.center,

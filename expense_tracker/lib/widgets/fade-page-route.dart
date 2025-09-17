@@ -1,15 +1,30 @@
+// lib/widgets/fade_page_route.dart
 import 'package:flutter/material.dart';
 
 class FadePageRoute<T> extends PageRouteBuilder<T> {
-  final Widget page;
-  FadePageRoute({required this.page})
-      : super(
-          transitionDuration: const Duration(milliseconds: 240),
-          reverseTransitionDuration: const Duration(milliseconds: 200),
-          pageBuilder: (context, animation, secondaryAnimation) => page,
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            final curved = CurvedAnimation(parent: animation, curve: Curves.easeInOut);
-            return FadeTransition(opacity: curved, child: child);
-          },
-        );
+  final Widget child;
+
+  FadePageRoute({required this.child})
+    : super(
+        pageBuilder:
+            (context, animation, secondaryAnimation) =>
+                child,
+        transitionDuration: const Duration(
+          milliseconds: 300,
+        ),
+        reverseTransitionDuration: const Duration(
+          milliseconds: 300,
+        ),
+        transitionsBuilder: (
+          context,
+          animation,
+          secondaryAnimation,
+          child,
+        ) {
+          return FadeTransition(
+            opacity: animation,
+            child: child,
+          );
+        },
+      );
 }

@@ -1,5 +1,8 @@
+// lib/screens/splash_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
+
 import 'package:expense_tracker/utils/app_theme.dart';
 import 'package:expense_tracker/screens/auth_gate.dart';
 import 'package:expense_tracker/widgets/fade-page-route.dart';
@@ -11,7 +14,8 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   bool _navigated = false;
 
@@ -19,14 +23,20 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   void initState() {
     super.initState();
     _controller = AnimationController(vsync: this);
+
     // Safety net: navigate after 3 seconds even if the animation doesn't report loaded.
-    Future.delayed(const Duration(seconds: 3), _goNextSafely);
+    Future.delayed(
+      const Duration(seconds: 3),
+      _goNextSafely,
+    );
   }
 
   void _goNextSafely() {
     if (_navigated || !mounted) return;
     _navigated = true;
-    Navigator.of(context).pushReplacement(FadePageRoute(page: const AuthGate()));
+    Navigator.of(context).pushReplacement(
+      FadePageRoute(child: const AuthGate()),
+    );
   }
 
   @override
@@ -37,8 +47,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    final tokens = Theme.of(context).extension<AppTokens>()!;
-    final shadows = Theme.of(context).extension<AppShadows>()!;
+    final tokens =
+        Theme.of(context).extension<AppTokens>()!;
+    final shadows =
+        Theme.of(context).extension<AppShadows>()!;
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -61,7 +73,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 decoration: BoxDecoration(
                   color: tokens.cardBackground,
                   borderRadius: BorderRadius.circular(28),
-                  border: Border.all(color: theme.colorScheme.onSurface.withOpacity(0.06)),
+                  border: Border.all(
+                    color: theme.colorScheme.onSurface
+                        .withOpacity(0.06),
+                  ),
                   boxShadow: shadows.cardShadow,
                 ),
                 child: ClipRRect(
@@ -75,7 +90,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                       _controller
                         ..duration = composition.duration;
                       try {
-                        _controller.forward().whenComplete(_goNextSafely);
+                        _controller.forward().whenComplete(
+                          _goNextSafely,
+                        );
                       } catch (_) {
                         _goNextSafely();
                       }
@@ -93,12 +110,20 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: tokens.primaryAccent,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(
+                        16,
+                      ),
                       boxShadow: shadows.cardShadow,
-                      border: Border.all(color: theme.colorScheme.onSurface.withOpacity(0.06)),
+                      border: Border.all(
+                        color: theme.colorScheme.onSurface
+                            .withOpacity(0.06),
+                      ),
                     ),
                     child: Text(
                       'Expense Manager',
