@@ -1,0 +1,157 @@
+query,intent
+add expense,navigationAddExpense
+new expense,navigationAddExpense
+create expense,navigationAddExpense
+record expense,navigationAddExpense
+log expense,navigationAddExpense
+enter expense,navigationAddExpense
+input expense,navigationAddExpense
+add transaction,navigationAddExpense
+new transaction,navigationAddExpense
+how to add,navigationAddExpense
+how do i add,navigationAddExpense
+add new expense,navigationAddExpense
+track expense,navigationAddExpense
+insert expense,navigationAddExpense
+log new spend,navigationAddExpense
+report,navigationReports
+analysis,navigationReports
+analytics,navigationReports
+chart,navigationReports
+graph,navigationReports
+visual,navigationReports
+breakdown,navigationReports
+summary,navigationReports
+overview,navigationReports
+statistics,navigationReports
+show reports,navigationReports
+view reports,navigationReports
+financial report,navigationReports
+see reports,navigationReports
+reports page,navigationReports
+view analytics,navigationReports
+spending report,navigationReports
+profile,navigationProfile
+account,navigationProfile
+settings,navigationProfile
+personal info,navigationProfile
+my info,navigationProfile
+user info,navigationProfile
+edit profile,navigationProfile
+change password,navigationProfile
+account settings,navigationProfile
+my profile,navigationProfile
+user details,navigationProfile
+history,navigationHistory
+all expenses,navigationHistory
+transactions,navigationHistory
+expense list,navigationHistory
+view all,navigationHistory
+see all,navigationHistory
+complete list,navigationHistory
+full history,navigationHistory
+transaction history,navigationHistory
+expense history,navigationHistory
+past expenses,navigationHistory
+total spent,totalSpending
+how much spent,totalSpending
+total spending,totalSpending
+overall spending,totalSpending
+total expense,totalSpending
+total amount,totalSpending
+sum of expenses,totalSpending
+all my expenses,totalSpending
+total money,totalSpending
+overall cost,totalSpending
+grand total,totalSpending
+how much have i spent,totalSpending
+my total spending,totalSpending
+how much did i spend on food,categorySpending
+spending on transport,categorySpending
+money on entertainment,categorySpending
+show my shopping expenses,categorySpending
+what are my bills,categorySpending
+health costs,categorySpending
+category breakdown,categorySpending
+expenses in groceries,categorySpending
+category total for travel,categorySpending
+biggest expense,topExpenses
+largest expense,topExpenses
+highest expense,topExpenses
+top expense,topExpenses
+most expensive,topExpenses
+maximum expense,topExpenses
+costliest items,topExpenses
+major expenses,topExpenses
+big purchases,topExpenses
+top spends,topExpenses
+recent expense,recentExpenses
+latest expense,recentExpenses
+last expense,recentExpenses
+newest transactions,recentExpenses
+recent transactions,recentExpenses
+latest spending,recentExpenses
+what did i just buy,recentExpenses
+show my recent purchases,recentExpenses
+last few expenses,recentExpenses
+how much this month,monthlySpending
+current month spending,monthlySpending
+monthly expenses,monthlySpending
+spending last month,monthlySpending
+compare this month to last month,monthlySpending
+monthly total,monthlySpending
+spending for this month,monthlySpending
+this week spending,weeklySpending
+current week total,weeklySpending
+weekly expenses,weeklySpending
+last week spending,weeklySpending
+show my weekly report,weeklySpending
+how much did i spend this week,weeklySpending
+how much today,dailySpending
+daily spending,dailySpending
+what did i spend today,dailySpending
+yesterday's expenses,dailySpending
+daily total,dailySpending
+todays spending,dailySpending
+compare spending,expenseComparison
+compare months,expenseComparison
+spending vs last month,expenseComparison
+did my spending increase,expenseComparison
+compare food spending between months,expenseComparison
+difference in spending,expenseComparison
+search for coffee,searchExpenses
+find my starbucks expense,searchExpenses
+look for transactions with amazon,searchExpenses
+show me expenses containing pizza,searchExpenses
+give me insights,insights
+analyze my spending,insights
+show me spending insights,insights
+financial insights,insights
+smart analysis,insights
+any interesting patterns?,insights
+give me spending tips,spendingTips
+how can i save money,spendingTips
+budget tips,spendingTips
+financial advice,spendingTips
+money saving tips,spendingTips
+tips to reduce my expenses,spendingTips
+analyze my budget,budgetAnalysis
+budget breakdown,budgetAnalysis
+how am i doing on my budget,budgetAnalysis
+budget status,budgetAnalysis
+check my budget variance,budgetAnalysis
+help,generalHelp
+help me,generalHelp
+i need assistance,generalHelp
+support,generalHelp
+can you help me,generalHelp
+what can you do,appFeatures
+what are your features,appFeatures
+show me your capabilities,appFeatures
+what functions do you have,appFeatures
+tell me about the app,appFeatures
+how to use this app,howToUse
+how does this work,howToUse
+getting started guide,howToUse
+app tutorial,howToUse
+instructions,howToUse

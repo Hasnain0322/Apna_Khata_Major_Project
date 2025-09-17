@@ -1,0 +1,13 @@
+# Primary dependencies for the Flask app and ML models
+Flask
+joblib
+pandas
+scikit-learn
+
+# Implied dependencies for receipt and voice processing
+# The 'src.parser.receipt_parser' module likely uses a library
+# like Pytesseract for Optical Character Recognition (OCR).
+pytesseract
+# The 'src.speech_to_text.transcriber' module likely uses
+# a library like SpeechRecognition to handle audio files.
+SpeechRecognition

@@ -1,5 +1,4 @@
 // lib/services/response_generator.dart
-
 import 'package:expense_tracker/models/expense_model.dart';
 import 'package:expense_tracker/models/user_profile_model.dart';
 import 'package:expense_tracker/services/query_intent.dart';
@@ -43,46 +42,62 @@ class ResponseGenerator {
     print('Generating response for intent: $intent');
 
     switch (intent) {
+      // Navigation: ensure add-expense gives add guidance only
       case QueryIntent.navigationAddExpense:
-        return _generateNavigationResponse(
-          'Here\'s how to add an expense, $userName:', // explain first
-          [
-            '💰 Add Manually',
-            '🎤 Voice Entry',
-            '📷 Scan Receipt',
-          ],
-          ['add_expense'], // user taps to navigate
-        );
+        return _generateAddExpenseHowTo(userName);
+
       case QueryIntent.navigationReports:
         return _generateNavigationResponse(
-          'Reports show your trends and breakdowns:',
+          'Reports show your analytics and breakdowns:',
           [
             '📊 Weekly Analytics',
             '📈 Monthly Trends',
             '🥧 Category Breakdown',
           ],
-          ['reports'],
+          [
+            QuickAction(
+              label: 'Open Reports',
+              type: QuickActionType.navigation,
+              data: 'reports',
+            ),
+          ],
         );
+
       case QueryIntent.navigationProfile:
         return _generateNavigationResponse(
-          'Profile lets you manage your account:',
+          'Manage your account and profile settings:',
           [
             '✏️ Edit Profile Info',
             '🔒 Change Password',
             '⚙️ Account Settings',
           ],
-          ['profile'],
+          [
+            QuickAction(
+              label: 'Open Profile',
+              type: QuickActionType.navigation,
+              data: 'profile',
+            ),
+          ],
         );
+
       case QueryIntent.navigationHistory:
         return _generateNavigationResponse(
-          'Your full expense history is available here:',
+          'View your entire expense history with filters and search:',
           [
             '📅 Filter by Date',
             '💰 Sort by Amount',
             '🔍 Search Expenses',
           ],
-          ['expenses'],
+          [
+            QuickAction(
+              label: 'Open History',
+              type: QuickActionType.navigation,
+              data: 'history',
+            ),
+          ],
         );
+
+      // Spending summaries
       case QueryIntent.totalSpending:
         return _generateTotalSpendingResponse(
           expenses,
@@ -124,6 +139,8 @@ class ResponseGenerator {
           expenses,
           userName,
         );
+
+      // Search
       case QueryIntent.searchExpenses:
         return _generateSearchResponse(
           expenses,
@@ -136,8 +153,18 @@ class ResponseGenerator {
           originalQuery,
           userName,
         );
+
+      // Profile/help
       case QueryIntent.profileInfo:
         return _generateProfileInfoResponse(userProfile);
+      case QueryIntent.appFeatures:
+        return _generateAppFeaturesResponse(userName);
+      case QueryIntent.howToUse:
+        return _generateHowToUseResponse(userName);
+      case QueryIntent.generalHelp:
+        return _generateHelpResponse(userName);
+
+      // Insights/budget
       case QueryIntent.insights:
         return _generateInsightsResponse(
           expenses,
@@ -153,12 +180,7 @@ class ResponseGenerator {
           expenses,
           userName,
         );
-      case QueryIntent.appFeatures:
-        return _generateAppFeaturesResponse(userName);
-      case QueryIntent.howToUse:
-        return _generateHowToUseResponse(userName);
-      case QueryIntent.generalHelp:
-        return _generateHelpResponse(userName);
+
       default:
         return _generateUnknownResponse(
           userName,
@@ -167,28 +189,42 @@ class ResponseGenerator {
     }
   }
 
-  static ChatResponse _generateNavigationResponse(
-    String intro,
-    List<String> features,
-    List<String> actions,
+  // --- Add Expense How-To: concise + a single clear primary action
+  static ChatResponse _generateAddExpenseHowTo(
+    String userName,
   ) {
-    final message =
-        '$intro\n\n${features.map((f) => '• $f').join('\n')}';
+    final message = [
+      'Here’s how to add an expense, $userName:',
+      '• Tap “Open Add Expense” to enter item, amount, and category.',
+      '• Optionally attach a receipt photo on the add screen.',
+      '• Save to record it instantly.',
+    ].join('\n');
     return ChatResponse(
       message: message,
-      quickActions:
-          actions
-              .map(
-                (a) => QuickAction(
-                  label: 'Open',
-                  type: QuickActionType.navigation,
-                  data: a,
-                ),
-              )
-              .toList(),
+      quickActions: [
+        QuickAction(
+          label: 'Open Add Expense',
+          type: QuickActionType.navigation,
+          data: 'add_expense',
+        ),
+      ],
     );
   }
 
+  static ChatResponse _generateNavigationResponse(
+    String intro,
+    List<String> bullets,
+    List<QuickAction> actions,
+  ) {
+    final message =
+        '$intro\n\n${bullets.map((f) => '• $f').join('\n')}';
+    return ChatResponse(
+      message: message,
+      quickActions: actions,
+    );
+  }
+
+  // --- Existing handlers unchanged below
   static ChatResponse _generateTotalSpendingResponse(
     List<Expense> expenses,
     String userName,
@@ -196,10 +232,10 @@ class ResponseGenerator {
     if (expenses.isEmpty) {
       return ChatResponse(
         message:
-            'You haven\'t recorded any expenses yet, $userName. Would you like to add your first expense?',
+            'No expenses yet, $userName. Start by adding your first expense.',
         quickActions: [
           QuickAction(
-            label: 'Add Expense',
+            label: 'Open Add Expense',
             type: QuickActionType.navigation,
             data: 'add_expense',
           ),
@@ -217,40 +253,36 @@ class ResponseGenerator {
       expenses,
     );
 
-    String message =
+    String msg =
         'Here\'s your spending summary, $userName:\n\n';
-    message +=
+    msg +=
         '💰 This Month: ${ExpenseAnalytics.formatCurrency(thisMonth)}\n';
-
     if (lastMonth > 0) {
-      final difference = thisMonth - lastMonth;
-      final percentChange =
-          ((difference / lastMonth) * 100).abs();
-
-      if (difference > 0) {
-        message +=
-            '📈 ${ExpenseAnalytics.formatCurrency(difference)} more than last month (+${percentChange.toStringAsFixed(1)}%)\n';
-      } else if (difference < 0) {
-        message +=
-            '📉 ${ExpenseAnalytics.formatCurrency(difference.abs())} less than last month (-${percentChange.toStringAsFixed(1)}%)\n';
+      final diff = thisMonth - lastMonth;
+      final pct = ((diff / lastMonth) * 100).abs();
+      if (diff > 0) {
+        msg +=
+            '📈 ${ExpenseAnalytics.formatCurrency(diff)} more than last month (+${pct.toStringAsFixed(1)}%)\n';
+      } else if (diff < 0) {
+        msg +=
+            '📉 ${ExpenseAnalytics.formatCurrency(diff.abs())} less than last month (-${pct.toStringAsFixed(1)}%)\n';
       } else {
-        message += '📊 Same as last month\n';
+        msg += '📊 Same as last month\n';
       }
     }
-
-    message +=
+    msg +=
         '\n🎯 All Time Total: ${ExpenseAnalytics.formatCurrency(total)}';
 
     return ChatResponse(
-      message: message,
+      message: msg,
       quickActions: [
         QuickAction(
-          label: 'View Reports',
+          label: 'Open Reports',
           type: QuickActionType.navigation,
           data: 'reports',
         ),
         QuickAction(
-          label: 'Add Expense',
+          label: 'Open Add Expense',
           type: QuickActionType.navigation,
           data: 'add_expense',
         ),
@@ -266,44 +298,41 @@ class ResponseGenerator {
   ) {
     final category =
         ExpenseAnalytics.extractCategoryFromQuery(query);
-
     if (category == null) {
-      final categoryBreakdown =
+      final breakdown =
           ExpenseAnalytics.getCategoryBreakdown(expenses);
-      if (categoryBreakdown.isEmpty) {
+      if (breakdown.isEmpty) {
         return ChatResponse(
           message:
-              'No expenses found, $userName. Start by adding some expenses!',
+              'No expenses found, $userName. Try adding some expenses first.',
           quickActions: [
             QuickAction(
-              label: 'Add Expense',
+              label: 'Open Add Expense',
               type: QuickActionType.navigation,
               data: 'add_expense',
             ),
           ],
         );
       }
-
-      String message =
-          'Here\'s your spending by category, $userName:\n\n';
-      final sortedCategories =
-          categoryBreakdown.entries.toList()
+      final sorted =
+          breakdown.entries.toList()
             ..sort((a, b) => b.value.compareTo(a.value));
-      for (final entry in sortedCategories.take(5)) {
-        message +=
-            '• ${_capitalizeFirst(entry.key)}: ${ExpenseAnalytics.formatCurrency(entry.value)}\n';
+      String msg =
+          'Your spending by category, $userName:\n\n';
+      for (final e in sorted.take(5)) {
+        msg +=
+            '• ${_cap(e.key)}: ${ExpenseAnalytics.formatCurrency(e.value)}\n';
       }
-
       return ChatResponse(
-        message: message,
+        message: msg,
         quickActions: [
           QuickAction(
-            label: 'View Reports',
+            label: 'Open Reports',
             type: QuickActionType.navigation,
             data: 'reports',
           ),
           QuickAction(
-            label: 'Add Expense',
+            label: 'Open Add Expense',
             type: QuickActionType.navigation,
             data: 'add_expense',
           ),
@@ -318,29 +347,27 @@ class ResponseGenerator {
       if (amount == 0) {
         return ChatResponse(
           message:
-              'You haven\'t spent anything on ${_capitalizeFirst(category)} yet, $userName.',
+              'No spending on ${_cap(category)} yet, $userName.',
           quickActions: [
             QuickAction(
-              label:
-                  'Add ${_capitalizeFirst(category)} Expense',
+              label: 'Add ${_cap(category)} Expense',
               type: QuickActionType.navigation,
               data: 'add_expense',
             ),
           ],
         );
       }
-
       return ChatResponse(
         message:
-            'You\'ve spent ${ExpenseAnalytics.formatCurrency(amount)} on ${_capitalizeFirst(category)} this month, $userName.',
+            'You\'ve spent ${ExpenseAnalytics.formatCurrency(amount)} on ${_cap(category)} this month, $userName.',
         quickActions: [
           QuickAction(
-            label: 'View Category Details',
+            label: 'Open Category Report',
             type: QuickActionType.navigation,
             data: 'reports',
           ),
           QuickAction(
-            label: 'Add Expense',
+            label: 'Open Add Expense',
             type: QuickActionType.navigation,
             data: 'add_expense',
           ),
@@ -354,44 +381,38 @@ class ResponseGenerator {
     List<Expense> expenses,
     String userName,
   ) {
-    final topExpenses = ExpenseAnalytics.getTopExpenses(
-      expenses,
-    );
-
-    if (topExpenses.isEmpty) {
+    final top = ExpenseAnalytics.getTopExpenses(expenses);
+    if (top.isEmpty) {
       return ChatResponse(
         message:
-            'No expenses found, $userName. Add some expenses to see your biggest spends!',
+            'No expenses found, $userName. Add some to see your biggest spends.',
         quickActions: [
           QuickAction(
-            label: 'Add Expense',
+            label: 'Open Add Expense',
             type: QuickActionType.navigation,
             data: 'add_expense',
           ),
         ],
       );
     }
-
-    String message =
-        'Your biggest expenses, $userName:\n\n';
-    for (int i = 0; i < topExpenses.length; i++) {
-      final expense = topExpenses[i];
-      message +=
-          '${i + 1}. ${expense.item} - ${ExpenseAnalytics.formatCurrency(expense.amount)}\n';
-      message +=
-          '   📅 ${ExpenseAnalytics.formatDate(expense.timestamp.toDate())}\n\n';
+    String msg = 'Your biggest expenses, $userName:\n\n';
+    for (int i = 0; i < top.length; i++) {
+      final e = top[i];
+      msg +=
+          '${i + 1}. ${e.item} - ${ExpenseAnalytics.formatCurrency(e.amount)}\n';
+      msg +=
+          '   📅 ${ExpenseAnalytics.formatDate(e.timestamp.toDate())}\n\n';
     }
-
     return ChatResponse(
-      message: message,
+      message: msg,
       quickActions: [
         QuickAction(
-          label: 'View All History',
+          label: 'Open History',
           type: QuickActionType.navigation,
           data: 'history',
         ),
         QuickAction(
-          label: 'Add Expense',
+          label: 'Open Add Expense',
           type: QuickActionType.navigation,
           data: 'add_expense',
         ),
@@ -404,41 +425,39 @@ class ResponseGenerator {
     List<Expense> expenses,
     String userName,
   ) {
-    final recentExpenses =
-        ExpenseAnalytics.getRecentExpenses(expenses);
-
-    if (recentExpenses.isEmpty) {
+    final recents = ExpenseAnalytics.getRecentExpenses(
+      expenses,
+    );
+    if (recents.isEmpty) {
       return ChatResponse(
         message:
-            'No recent expenses found, $userName. Ready to add your first expense?',
+            'No recent expenses, $userName. Ready to add your first expense?',
         quickActions: [
           QuickAction(
-            label: 'Add Expense',
+            label: 'Open Add Expense',
             type: QuickActionType.navigation,
             data: 'add_expense',
           ),
         ],
       );
     }
-
-    String message = 'Your recent expenses, $userName:\n\n';
-    for (final expense in recentExpenses) {
-      message +=
-          '• ${expense.item} - ${ExpenseAnalytics.formatCurrency(expense.amount)}\n';
-      message +=
-          '  📁 ${_capitalizeFirst(expense.category)} • ${ExpenseAnalytics.formatDate(expense.timestamp.toDate())}\n\n';
+    String msg = 'Your recent expenses, $userName:\n\n';
+    for (final e in recents) {
+      msg +=
+          '• ${e.item} - ${ExpenseAnalytics.formatCurrency(e.amount)}\n';
+      msg +=
+          '  📁 ${_cap(e.category)} • ${ExpenseAnalytics.formatDate(e.timestamp.toDate())}\n\n';
     }
-
     return ChatResponse(
-      message: message,
+      message: msg,
       quickActions: [
         QuickAction(
-          label: 'View All History',
+          label: 'Open History',
           type: QuickActionType.navigation,
           data: 'history',
         ),
         QuickAction(
-          label: 'Add Expense',
+          label: 'Open Add Expense',
           type: QuickActionType.navigation,
           data: 'add_expense',
         ),
@@ -457,37 +476,34 @@ class ResponseGenerator {
     final lastMonth = ExpenseAnalytics.getLastMonthSpending(
       expenses,
     );
-
-    String message =
+    String msg =
         'Monthly spending overview, $userName:\n\n';
-    message +=
+    msg +=
         '📅 This Month: ${ExpenseAnalytics.formatCurrency(thisMonth)}\n';
-    message +=
+    msg +=
         '📅 Last Month: ${ExpenseAnalytics.formatCurrency(lastMonth)}\n\n';
-
     if (thisMonth > 0 && lastMonth > 0) {
-      final difference = thisMonth - lastMonth;
-      if (difference > 0) {
-        message +=
-            '📈 Spending ${ExpenseAnalytics.formatCurrency(difference)} more this month';
-      } else if (difference < 0) {
-        message +=
-            '📉 Saving ${ExpenseAnalytics.formatCurrency(difference.abs())} compared to last month! 🎉';
+      final diff = thisMonth - lastMonth;
+      if (diff > 0) {
+        msg +=
+            '📈 Spending ${ExpenseAnalytics.formatCurrency(diff)} more this month';
+      } else if (diff < 0) {
+        msg +=
+            '📉 Saving ${ExpenseAnalytics.formatCurrency(diff.abs())} vs last month 🎉';
       } else {
-        message += '📊 Same spending as last month';
+        msg += '📊 Same spending as last month';
       }
     }
-
     return ChatResponse(
-      message: message,
+      message: msg,
       quickActions: [
         QuickAction(
-          label: 'View Monthly Report',
+          label: 'Open Monthly Report',
           type: QuickActionType.navigation,
           data: 'reports',
         ),
         QuickAction(
-          label: 'Add Expense',
+          label: 'Open Add Expense',
           type: QuickActionType.navigation,
           data: 'add_expense',
         ),
@@ -506,19 +522,16 @@ class ResponseGenerator {
       now.month,
       now.day - now.weekday + 1,
     );
-    final weeklySpending =
-        ExpenseAnalytics.getTotalSpending(
-          expenses,
-          startDate: startOfWeek,
-        );
-
-    String message =
-        'Weekly spending, $userName: ${ExpenseAnalytics.formatCurrency(weeklySpending)}';
+    final weekly = ExpenseAnalytics.getTotalSpending(
+      expenses,
+      startDate: startOfWeek,
+    );
     return ChatResponse(
-      message: message,
+      message:
+          'Weekly spending, $userName: ${ExpenseAnalytics.formatCurrency(weekly)}',
       quickActions: [
         QuickAction(
-          label: 'View Details',
+          label: 'Open Reports',
           type: QuickActionType.navigation,
           data: 'reports',
         ),
@@ -537,18 +550,16 @@ class ResponseGenerator {
       now.month,
       now.day,
     );
-    final dailySpending = ExpenseAnalytics.getTotalSpending(
+    final daily = ExpenseAnalytics.getTotalSpending(
       expenses,
       startDate: startOfDay,
     );
-
-    String message =
-        'Daily spending, $userName: ${ExpenseAnalytics.formatCurrency(dailySpending)}';
     return ChatResponse(
-      message: message,
+      message:
+          'Today\'s spending, $userName: ${ExpenseAnalytics.formatCurrency(daily)}',
       quickActions: [
         QuickAction(
-          label: 'View Details',
+          label: 'Open Reports',
           type: QuickActionType.navigation,
           data: 'reports',
         ),
@@ -567,14 +578,12 @@ class ResponseGenerator {
     final lastMonth = ExpenseAnalytics.getLastMonthSpending(
       expenses,
     );
-
-    String message =
-        'Comparison: This month ${ExpenseAnalytics.formatCurrency(thisMonth)}, last month ${ExpenseAnalytics.formatCurrency(lastMonth)}';
     return ChatResponse(
-      message: message,
+      message:
+          'Comparison: This month ${ExpenseAnalytics.formatCurrency(thisMonth)} vs last month ${ExpenseAnalytics.formatCurrency(lastMonth)}',
       quickActions: [
         QuickAction(
-          label: 'View Reports',
+          label: 'Open Reports',
           type: QuickActionType.navigation,
           data: 'reports',
         ),
@@ -588,21 +597,18 @@ class ResponseGenerator {
     String query,
     String userName,
   ) {
-    final searchTerm =
-        ExpenseAnalytics.extractCategoryFromQuery(query) ??
-        '';
-    final searchResults = ExpenseAnalytics.searchExpenses(
+    final term =
+        QueryClassifier.extractSearchTerm(query) ?? '';
+    final results = ExpenseAnalytics.searchExpenses(
       expenses,
-      searchTerm,
+      term,
     );
-
-    String message =
-        'Search results for $searchTerm: ${searchResults.length} items found.';
     return ChatResponse(
-      message: message,
+      message:
+          'Search results for "$term": ${results.length} found.',
       quickActions: [
         QuickAction(
-          label: 'View All',
+          label: 'Open History',
           type: QuickActionType.navigation,
           data: 'history',
         ),
@@ -616,20 +622,28 @@ class ResponseGenerator {
     String query,
     String userName,
   ) {
-    String message =
-        'Expenses by date: (Implementation in progress)';
-    return ChatResponse(message: message, hasData: true);
+    return ChatResponse(
+      message: 'Expenses by date: feature coming soon.',
+      quickActions: [
+        QuickAction(
+          label: 'Open History',
+          type: QuickActionType.navigation,
+          data: 'history',
+        ),
+      ],
+      hasData: true,
+    );
   }
 
   static ChatResponse _generateProfileInfoResponse(
     UserProfile? userProfile,
   ) {
-    final userName = userProfile?.displayName ?? 'User';
+    final name = userProfile?.displayName ?? 'User';
     return ChatResponse(
-      message: 'Profile info for $userName',
+      message: 'Profile info for $name',
       quickActions: [
         QuickAction(
-          label: 'Edit Profile',
+          label: 'Open Profile',
           type: QuickActionType.navigation,
           data: 'profile',
         ),
@@ -640,19 +654,49 @@ class ResponseGenerator {
   static ChatResponse _generateAppFeaturesResponse(
     String userName,
   ) {
-    return ChatResponse(message: 'App features list');
+    return ChatResponse(
+      message:
+          'I can summarize spending, analyze budgets, show trends, and navigate to reports.',
+      quickActions: [
+        QuickAction(
+          label: 'Open Reports',
+          type: QuickActionType.navigation,
+          data: 'reports',
+        ),
+      ],
+    );
   }
 
   static ChatResponse _generateHowToUseResponse(
     String userName,
   ) {
-    return ChatResponse(message: 'How to use guide');
+    return ChatResponse(
+      message:
+          'Ask: "Analyze my budget", "Monthly spending", "Recent expenses", or "Add an expense".',
+      quickActions: [
+        QuickAction(
+          label: 'Open Add Expense',
+          type: QuickActionType.navigation,
+          data: 'add_expense',
+        ),
+      ],
+    );
   }
 
   static ChatResponse _generateHelpResponse(
     String userName,
   ) {
-    return ChatResponse(message: 'Help information');
+    return ChatResponse(
+      message:
+          'Try: "Monthly spending", "Top expenses", "Analyze my budget", or "Add expense".',
+      quickActions: [
+        QuickAction(
+          label: 'Open Add Expense',
+          type: QuickActionType.navigation,
+          data: 'add_expense',
+        ),
+      ],
+    );
   }
 
   static ChatResponse _generateUnknownResponse(
@@ -661,17 +705,12 @@ class ResponseGenerator {
   ) {
     return ChatResponse(
       message:
-          'Sorry, I didn\'t understand that, $userName. Try "how much did I spend this month?" or "analyze my budget".',
+          'Sorry, that wasn\'t clear, $userName. Try "Add expense" or "Monthly spending".',
       quickActions: [
         QuickAction(
-          label: 'Spending Summary',
-          type: QuickActionType.query,
-          data: 'how much did I spend this month?',
-        ),
-        QuickAction(
-          label: 'Budget Analysis',
-          type: QuickActionType.query,
-          data: 'analyze my budget',
+          label: 'Open Add Expense',
+          type: QuickActionType.navigation,
+          data: 'add_expense',
         ),
       ],
     );
@@ -684,12 +723,34 @@ class ResponseGenerator {
     final insights = ProactiveInsights.generateInsights(
       expenses,
     );
-    String message =
-        'Your personalized insights, $userName:\n\n';
-    for (var insight in insights) {
-      message += '${insight.title}: ${insight.message}\n\n';
+    if (insights.isEmpty) {
+      return ChatResponse(
+        message:
+            'No insights yet, $userName. Add more expenses to unlock insights.',
+        quickActions: [
+          QuickAction(
+            label: 'Open Add Expense',
+            type: QuickActionType.navigation,
+            data: 'add_expense',
+          ),
+        ],
+      );
     }
-    return ChatResponse(message: message, hasData: true);
+    String msg = 'Your insights, $userName:\n\n';
+    for (final i in insights) {
+      msg += '${i.title}: ${i.message}\n\n';
+    }
+    return ChatResponse(
+      message: msg,
+      quickActions: [
+        QuickAction(
+          label: 'Open Reports',
+          type: QuickActionType.navigation,
+          data: 'reports',
+        ),
+      ],
+      hasData: true,
+    );
   }
 
   static ChatResponse _generateSpendingTipsResponse(
@@ -699,9 +760,18 @@ class ResponseGenerator {
     final tips = ProactiveInsights.getSpendingTips(
       expenses,
     );
-    String message =
-        'Spending tips for you, $userName:\n\n${tips.join('\n')}';
-    return ChatResponse(message: message, hasData: true);
+    return ChatResponse(
+      message:
+          'Tips for you, $userName:\n\n${tips.join('\n')}',
+      quickActions: [
+        QuickAction(
+          label: 'Open Reports',
+          type: QuickActionType.navigation,
+          data: 'reports',
+        ),
+      ],
+      hasData: true,
+    );
   }
 
   static ChatResponse _generateBudgetAnalysisResponse(
@@ -711,27 +781,54 @@ class ResponseGenerator {
     final total = ExpenseAnalytics.getTotalSpending(
       expenses,
     );
-    String message =
-        'Detailed budget analysis, $userName:\n\n';
-    message +=
-        'Total Spending: ${ExpenseAnalytics.formatCurrency(total)}\n';
-    message += 'See insights for variance and trends.';
+    final thisMonth = ExpenseAnalytics.getThisMonthSpending(
+      expenses,
+    );
+    final lastMonth = ExpenseAnalytics.getLastMonthSpending(
+      expenses,
+    );
+    final categories =
+        ExpenseAnalytics.getCategoryBreakdown(expenses);
+
+    String msg = 'Budget analysis, $userName:\n\n';
+    msg +=
+        '• Total: ${ExpenseAnalytics.formatCurrency(total)}\n';
+    msg +=
+        '• This Month: ${ExpenseAnalytics.formatCurrency(thisMonth)}\n';
+    msg +=
+        '• Last Month: ${ExpenseAnalytics.formatCurrency(lastMonth)}\n';
+    if (categories.isNotEmpty) {
+      final sorted =
+          categories.entries.toList()
+            ..sort((a, b) => b.value.compareTo(a.value));
+      final top = sorted.take(3);
+      msg += '• Top Categories:\n';
+      for (final e in top) {
+        msg +=
+            '   - ${_cap(e.key)}: ${ExpenseAnalytics.formatCurrency(e.value)}\n';
+      }
+    }
     return ChatResponse(
-      message: message,
+      message: msg,
       quickActions: [
         QuickAction(
-          label: 'View Reports',
+          label: 'Open Reports',
           type: QuickActionType.navigation,
           data: 'reports',
+        ),
+        QuickAction(
+          label: 'Open Add Expense',
+          type: QuickActionType.navigation,
+          data: 'add_expense',
         ),
       ],
       hasData: true,
     );
   }
 
-  static String _capitalizeFirst(String text) {
-    if (text.isEmpty) return text;
-    return text.toUpperCase() +
-        text.substring(1).toLowerCase();
-  }
+  static String _cap(String s) =>
+      s.isEmpty
+          ? s
+          : s[0].toUpperCase() +
+              s.substring(1).toLowerCase();
 }

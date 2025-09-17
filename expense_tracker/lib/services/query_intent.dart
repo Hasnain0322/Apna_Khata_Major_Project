@@ -2,10 +2,13 @@
 import 'dart:math';
 
 enum QueryIntent {
+  // Navigation
   navigationAddExpense,
   navigationReports,
   navigationProfile,
   navigationHistory,
+
+  // Spending summaries
   totalSpending,
   categorySpending,
   topExpenses,
@@ -14,462 +17,333 @@ enum QueryIntent {
   weeklySpending,
   dailySpending,
   expenseComparison,
+
+  // Search
   searchExpenses,
   expensesByDate,
+
+  // Profile and general
   profileInfo,
-  insights,
-  spendingTips,
-  budgetAnalysis,
   generalHelp,
   appFeatures,
   howToUse,
+
+  // Insights and budget
+  insights,
+  spendingTips,
+  budgetAnalysis,
+
   unknown,
 }
 
 class QueryClassifier {
   static QueryIntent classifyQuery(String query) {
-    final lowerQuery = query.toLowerCase().trim();
-    print('Classifying query: $lowerQuery');
+    final q = query.toLowerCase().trim();
+    print('Classifying query: $q');
 
-    if (_matchesNavigationPatterns(lowerQuery)) {
-      return _getNavigationIntent(lowerQuery);
-    }
-    if (_matchesSpendingPatterns(lowerQuery)) {
-      return _getSpendingIntent(lowerQuery);
-    }
-    if (_matchesSearchPatterns(lowerQuery)) {
-      return _getSearchIntent(lowerQuery);
-    }
-    if (_matchesProfilePatterns(lowerQuery)) {
+    // 1) Explicit navigation phrases FIRST to avoid misclassification
+    if (_matchesAddExpensePhrases(q))
+      return QueryIntent.navigationAddExpense;
+    if (_matchesNavigationPhrases(q))
+      return _getNavigationIntent(q);
+
+    // 2) Domain intents
+    if (_matchesSpendingPatterns(q))
+      return _getSpendingIntent(q);
+    if (_matchesInsightPatterns(q))
+      return _getInsightIntent(q);
+    if (_matchesSearchPatterns(q))
+      return _getSearchIntent(q);
+
+    // 3) Profile and help
+    if (_matchesProfilePatterns(q))
       return QueryIntent.profileInfo;
-    }
-    if (_matchesInsightPatterns(lowerQuery)) {
-      return _getInsightIntent(lowerQuery);
-    }
-    if (_matchesHelpPatterns(lowerQuery)) {
-      return _getHelpIntent(lowerQuery);
-    }
+    if (_matchesHelpPatterns(q)) return _getHelpIntent(q);
 
-    return _fuzzyMatchIntent(lowerQuery);
+    // 4) Fallback fuzzy
+    return _fuzzyMatchIntent(q);
   }
 
-  static bool _matchesNavigationPatterns(String query) {
-    final patterns = [
-      'add',
-      'create',
-      'new',
-      'record',
-      'log',
-      'enter',
-      'input',
-      'how to add',
-      'add new',
-      'insert',
-      'track new',
-      'report',
-      'analysis',
-      'analytics',
-      'chart',
-      'graph',
-      'visual',
-      'summary',
-      'overview',
-      'insights',
-      'statistics',
-      'show reports',
-      'view reports',
-      'financial report',
-      'see reports',
-      'profile',
-      'account',
-      'settings',
-      'personal info',
-      'my info',
-      'user info',
-      'edit profile',
-      'change password',
-      'my account',
-      'history',
-      'all expenses',
-      'transactions',
-      'expense list',
-      'view all',
-      'see all',
-      'complete list',
-      'full history',
-      'transaction history',
-      'navigate',
-      'go to',
-      'open',
-      'show me',
-      'take me to',
-      'go',
-      'move to',
-    ];
-    return patterns.any((p) => query.contains(p));
-  }
-
-  static QueryIntent _getNavigationIntent(String query) {
-    if (_fuzzyContains(query, [
+  // --- Add Expense: strict phrases only
+  static bool _matchesAddExpensePhrases(String q) {
+    final phrases = [
+      'how to add an expense',
+      'how to add expense',
+      'add an expense',
       'add expense',
-      'new expense',
       'create expense',
       'record expense',
       'log expense',
       'enter expense',
       'input expense',
-      'add transaction',
-      'new transaction',
-      'how to add',
-      'how do i add',
-      'add new expense',
-      'track expense',
-      'insert expense',
-      'log new spend',
-    ])) {
-      return QueryIntent.navigationAddExpense;
-    }
-    if (_fuzzyContains(query, [
-      'report',
-      'analysis',
-      'analytics',
-      'chart',
-      'graph',
-      'visual',
-      'breakdown',
-      'summary',
-      'overview',
-      'insights',
-      'statistics',
-      'show reports',
+      'scan receipt',
+      'voice entry',
+    ];
+    return phrases.any((p) => q.contains(p));
+  }
+
+  // --- Other navigation phrases
+  static bool _matchesNavigationPhrases(String q) {
+    final phrases = [
+      'open reports',
       'view reports',
-      'financial report',
-      'see reports',
+      'go to reports',
       'reports page',
-      'view analytics',
-      'spending report',
+      'open profile',
+      'go to profile',
+      'account settings',
+      'edit profile',
+      'open history',
+      'view history',
+      'expense history',
+      'transaction history',
+    ];
+    return phrases.any((p) => q.contains(p));
+  }
+
+  static QueryIntent _getNavigationIntent(String q) {
+    if (_containsAny(q, [
+      'open reports',
+      'view reports',
+      'go to reports',
+      'reports page',
     ])) {
       return QueryIntent.navigationReports;
     }
-    if (_fuzzyContains(query, [
-      'profile',
-      'account',
-      'settings',
-      'personal info',
-      'my info',
-      'user info',
-      'edit profile',
-      'change password',
+    if (_containsAny(q, [
+      'open profile',
+      'go to profile',
       'account settings',
-      'my profile',
-      'user details',
-      'personal settings',
+      'edit profile',
     ])) {
       return QueryIntent.navigationProfile;
     }
-    if (_fuzzyContains(query, [
-      'history',
-      'all expenses',
-      'transactions',
-      'expense list',
-      'view all',
-      'see all',
-      'complete list',
-      'full history',
-      'transaction history',
+    if (_containsAny(q, [
+      'open history',
+      'view history',
       'expense history',
-      'past expenses',
-      'old spends',
-      'previous transactions',
+      'transaction history',
     ])) {
       return QueryIntent.navigationHistory;
     }
     return QueryIntent.unknown;
   }
 
-  static bool _matchesSpendingPatterns(String query) {
+  // --- Spending logic
+  static bool _matchesSpendingPatterns(String q) {
     final patterns = [
       'spent',
       'spend',
       'spending',
-      'money',
-      'cost',
       'expense',
-      'total',
       'amount',
-      'sum',
-      'budget',
-      'financial',
-      'price',
-      'paid',
+      'total',
       'how much',
-      'what did i spend',
-      'my spending',
-      'costs',
-      'expenditure',
-      'outgoings',
-      'how much did i',
-      'total cost',
-      'what is my',
-    ];
-    return patterns.any((p) => query.contains(p));
-  }
-
-  static QueryIntent _getSpendingIntent(String query) {
-    if (_fuzzyContains(query, [
-      'total spent',
-      'how much spent',
-      'total spending',
-      'overall spending',
-      'total expense',
-      'total amount',
-      'sum of expenses',
-      'all expenses',
-      'total money',
-      'overall cost',
-      'total costs',
-      'grand total',
-      'how much have i spent',
-      'my total spending',
-    ])) {
-      return QueryIntent.totalSpending;
-    }
-    if (_fuzzyContains(query, [
-          'spent on',
-          'spending on',
-          'money on',
-          'category',
-          'type of expense',
-          'food expense',
-          'transport cost',
-          'shopping expense',
-          'bill payment',
-          'expenses in category',
-          'category total',
-          'cost on',
-          'amount for',
-        ]) ||
-        _containsCategoryNames(query)) {
-      return QueryIntent.categorySpending;
-    }
-    if (_fuzzyContains(query, [
-      'biggest expense',
-      'largest expense',
-      'highest expense',
-      'top expense',
-      'most expensive',
-      'maximum expense',
-      'costliest',
-      'major expenses',
-      'big purchases',
-      'expensive items',
-      'top spends',
-      'biggest spend',
-    ])) {
-      return QueryIntent.topExpenses;
-    }
-    if (_fuzzyContains(query, [
-      'recent expense',
-      'latest expense',
-      'last expense',
-      'new expense',
-      'recent transaction',
-      'latest transaction',
-      'recent spending',
-      'what did i buy',
-      'recent purchases',
-      'last few expenses',
-      'latest spends',
-    ])) {
-      return QueryIntent.recentExpenses;
-    }
-    if (_fuzzyContains(query, [
       'this month',
-      'current month',
-      'monthly',
       'last month',
-      'previous month',
-      'month wise',
-      'per month',
-      'monthly expense',
-      'monthly spending',
-      'month total',
-      'spending this month',
-    ])) {
-      return QueryIntent.monthlySpending;
-    }
-    if (_fuzzyContains(query, [
       'this week',
-      'current week',
-      'weekly',
       'last week',
-      'previous week',
-      'week wise',
-      'per week',
-      'weekly expense',
-      'weekly spending',
-      'week total',
-    ])) {
-      return QueryIntent.weeklySpending;
-    }
-    if (_fuzzyContains(query, [
       'today',
       'daily',
-      'per day',
-      'this day',
-      'yesterday',
-      'day wise',
-      'daily expense',
-      'daily spending',
-      'today total',
-      'daily total',
-      'todays spending',
-    ])) {
-      return QueryIntent.dailySpending;
-    }
-    if (_fuzzyContains(query, [
+      'weekly',
+      'monthly',
       'compare',
       'comparison',
       'vs',
       'versus',
-      'difference between',
-      'more than',
-      'less than',
+    ];
+    return patterns.any((p) => q.contains(p));
+  }
+
+  static QueryIntent _getSpendingIntent(String q) {
+    if (_containsAny(q, [
+      'total spent',
+      'total spending',
+      'how much spent',
+      'overall spending',
+      'sum of expenses',
+      'all expenses',
+      'grand total',
+      'total amount',
+      'what is my total',
+    ]))
+      return QueryIntent.totalSpending;
+
+    if (_containsAny(q, [
+      'spent on',
+      'spending on',
+      'money on',
+      'category',
+      'category total',
+    ])) {
+      return QueryIntent.categorySpending;
+    }
+
+    if (_containsAny(q, [
+      'biggest expense',
+      'largest expense',
+      'highest expense',
+      'top expense',
+      'top spends',
+      'most expensive',
+    ]))
+      return QueryIntent.topExpenses;
+
+    if (_containsAny(q, [
+      'recent expense',
+      'latest expense',
+      'last expense',
+      'recent purchases',
+      'recent transactions',
+      'last few expenses',
+    ]))
+      return QueryIntent.recentExpenses;
+
+    if (_containsAny(q, [
+      'this month',
+      'monthly',
+      'last month',
+      'previous month',
+      'month total',
+    ])) {
+      return QueryIntent.monthlySpending;
+    }
+
+    if (_containsAny(q, [
+      'this week',
+      'weekly',
+      'last week',
+      'week total',
+    ])) {
+      return QueryIntent.weeklySpending;
+    }
+
+    if (_containsAny(q, [
+      'today',
+      'daily',
+      'yesterday',
+      'per day',
+      'daily total',
+    ])) {
+      return QueryIntent.dailySpending;
+    }
+
+    if (_containsAny(q, [
+      'compare',
+      'comparison',
+      'vs',
+      'versus',
+      'trend',
       'increase',
       'decrease',
-      'trend',
-      'compare months',
     ])) {
       return QueryIntent.expenseComparison;
     }
+
     return QueryIntent.totalSpending;
   }
 
-  static bool _matchesSearchPatterns(String query) {
-    final patterns = [
-      'search',
-      'find',
-      'look for',
-      'show me',
-      'filter',
-      'where is',
-      'when did i',
-      'did i buy',
-      'have i paid',
-      'expenses with',
-      'transactions containing',
-      'look up',
-      'query for',
-    ];
-    return patterns.any((p) => query.contains(p));
-  }
-
-  static QueryIntent _getSearchIntent(String query) {
-    if (_fuzzyContains(query, [
-      'search expense',
-      'find expense',
-      'look for expense',
-      'search transaction',
-      'find transaction',
-      'search item',
-      'find item',
-      'expenses with',
-      'transactions containing',
-    ])) {
-      return QueryIntent.searchExpenses;
-    }
-    if (_fuzzyContains(query, [
-      'expenses on',
-      'spending on date',
-      'expenses by date',
-      'on this date',
-      'expenses for',
-      'transactions on',
-      'spending on',
-    ])) {
-      return QueryIntent.expensesByDate;
-    }
-    return QueryIntent.searchExpenses;
-  }
-
-  static bool _matchesProfilePatterns(String query) {
-    final patterns = [
-      'my profile',
-      'who am i',
-      'account info',
-      'my info',
-      'user info',
-      'my details',
-      'personal info',
-      'my account',
-      'profile details',
-      'account details',
-    ];
-    return patterns.any((p) => query.contains(p));
-  }
-
-  static bool _matchesInsightPatterns(String query) {
+  // --- Insights / Budget
+  static bool _matchesInsightPatterns(String q) {
     final patterns = [
       'insights',
       'analyze',
-      'smart',
+      'analysis',
+      'budget',
       'tips',
       'advice',
       'suggestions',
-      'budget',
-      'save money',
-      'financial advice',
       'spending patterns',
-      'spending insights',
-      'analyze my spending',
-      'give me tips',
       'how to save',
-      'budget help',
-      'money saving',
-      'financial tips',
+      'smart insights',
+      'analyze my budget',
+      'budget analysis',
+      'budget breakdown',
     ];
-    return patterns.any((p) => query.contains(p));
+    return patterns.any((p) => q.contains(p));
   }
 
-  static QueryIntent _getInsightIntent(String query) {
-    if (_fuzzyContains(query, [
-      'insights',
-      'analyze my spending',
-      'spending insights',
-      'financial insights',
-      'smart insights',
-      'show insights',
-      'my insights',
-      'give insights',
-    ])) {
-      return QueryIntent.insights;
-    }
-    if (_fuzzyContains(query, [
-      'spending tips',
-      'save money',
-      'budget tips',
-      'financial tips',
-      'money advice',
-      'how to save',
-      'saving tips',
-      'tips to save',
-    ])) {
-      return QueryIntent.spendingTips;
-    }
-    if (_fuzzyContains(query, [
+  static QueryIntent _getInsightIntent(String q) {
+    if (_containsAny(q, [
+      'analyze my budget',
       'budget analysis',
       'budget breakdown',
       'analyze budget',
-      'budget insights',
-      'financial analysis',
-      'analyze my budget',
     ])) {
+      return QueryIntent.budgetAnalysis;
+    }
+    if (_containsAny(q, [
+      'spending tips',
+      'save money',
+      'budget tips',
+      'money advice',
+      'how to save',
+    ])) {
+      return QueryIntent.spendingTips;
+    }
+    if (_containsAny(q, [
+      'insights',
+      'spending insights',
+      'analyze my spending',
+      'show insights',
+      'smart insights',
+    ])) {
+      return QueryIntent.insights;
+    }
+    if (q.contains('budget') &&
+        (q.contains('analy') || q.contains('breakdown'))) {
       return QueryIntent.budgetAnalysis;
     }
     return QueryIntent.insights;
   }
 
-  static bool _matchesHelpPatterns(String query) {
+  // --- Search
+  static bool _matchesSearchPatterns(String q) {
+    final patterns = [
+      'search',
+      'find',
+      'look for',
+      'filter',
+      'where is',
+      'when did i',
+      'did i buy',
+      'have i paid',
+      'transactions containing',
+      'expenses with',
+    ];
+    return patterns.any((p) => q.contains(p));
+  }
+
+  static QueryIntent _getSearchIntent(String q) {
+    if (_containsAny(q, [
+      'expenses on',
+      'spending on date',
+      'expenses by date',
+      'transactions on',
+      'on this date',
+      'for ',
+    ]))
+      return QueryIntent.expensesByDate;
+    return QueryIntent.searchExpenses;
+  }
+
+  // --- Profile (present and used by classifyQuery)
+  static bool _matchesProfilePatterns(String q) {
+    final patterns = [
+      'my profile',
+      'profile',
+      'account info',
+      'my info',
+      'user info',
+      'profile details',
+      'account details',
+      'my account',
+    ];
+    return patterns.any((p) => q.contains(p));
+  }
+
+  // --- Help
+  static bool _matchesHelpPatterns(String q) {
     final patterns = [
       'help',
       'how to',
@@ -479,35 +353,25 @@ class QueryClassifier {
       'guide',
       'tutorial',
       'instructions',
-      'assist',
-      'support',
-      'what do you do',
-      'how does this work',
-      'app guide',
-      'assist me',
     ];
-    return patterns.any((p) => query.contains(p));
+    return patterns.any((p) => q.contains(p));
   }
 
-  static QueryIntent _getHelpIntent(String query) {
-    if (_fuzzyContains(query, [
+  static QueryIntent _getHelpIntent(String q) {
+    if (_containsAny(q, [
       'what can you do',
       'what features',
       'app features',
       'capabilities',
-      'what is possible',
       'functions',
-      'app capabilities',
     ])) {
       return QueryIntent.appFeatures;
     }
-    if (_fuzzyContains(query, [
+    if (_containsAny(q, [
       'how to use',
       'how does this work',
       'getting started',
       'tutorial',
-      'guide',
-      'instructions',
       'how to start',
     ])) {
       return QueryIntent.howToUse;
@@ -515,37 +379,54 @@ class QueryClassifier {
     return QueryIntent.generalHelp;
   }
 
-  static QueryIntent _fuzzyMatchIntent(String query) {
+  // --- Fuzzy fallback (conservative)
+  static QueryIntent _fuzzyMatchIntent(String q) {
     final intentPatterns = {
       QueryIntent.navigationAddExpense: [
+        'how to add an expense',
         'add expense',
-        'new expense',
-        'create expense',
         'record expense',
+        'log expense',
+        'enter expense',
       ],
       QueryIntent.navigationReports: [
-        'reports',
-        'analysis',
-        'charts',
-        'summary',
+        'open reports',
+        'view reports',
       ],
       QueryIntent.navigationProfile: [
-        'profile',
-        'account',
-        'settings',
+        'open profile',
+        'go to profile',
       ],
       QueryIntent.navigationHistory: [
-        'history',
-        'expenses list',
-        'transactions',
+        'open history',
+        'view history',
+      ],
+
+      QueryIntent.budgetAnalysis: [
+        'analyze my budget',
+        'budget analysis',
+        'budget breakdown',
       ],
       QueryIntent.totalSpending: [
-        'total spent',
-        'how much spent',
         'total spending',
+        'total spent',
+        'how much did i spend',
+      ],
+      QueryIntent.monthlySpending: [
+        'this month spending',
+        'monthly spending',
+        'last month spending',
+      ],
+      QueryIntent.weeklySpending: [
+        'weekly spending',
+        'this week spending',
+      ],
+      QueryIntent.dailySpending: [
+        'today spending',
+        'daily spending',
       ],
       QueryIntent.categorySpending: [
-        'spent on',
+        'spending on food',
         'category spending',
         'money on category',
       ],
@@ -557,256 +438,59 @@ class QueryClassifier {
         'recent expenses',
         'latest transactions',
       ],
-      QueryIntent.monthlySpending: [
-        'monthly spending',
-        'this month spent',
-      ],
-      QueryIntent.weeklySpending: [
-        'weekly spending',
-        'this week spent',
-      ],
-      QueryIntent.dailySpending: [
-        'daily spending',
-        'today spent',
-      ],
       QueryIntent.expenseComparison: [
         'compare spending',
         'vs last month',
       ],
       QueryIntent.searchExpenses: [
-        'search for',
-        'find expense',
+        'search expenses',
+        'find expenses',
       ],
       QueryIntent.expensesByDate: [
         'expenses on date',
-        'spending on',
-      ],
-      QueryIntent.profileInfo: [
-        'my profile',
-        'account info',
+        'transactions on',
       ],
       QueryIntent.insights: [
         'insights',
-        'analyze spending',
+        'spending insights',
       ],
       QueryIntent.spendingTips: [
         'spending tips',
         'save money',
       ],
-      QueryIntent.budgetAnalysis: [
-        'budget analysis',
-        'financial analysis',
-      ],
       QueryIntent.generalHelp: ['help', 'what can you do'],
       QueryIntent.appFeatures: ['features', 'capabilities'],
       QueryIntent.howToUse: ['how to use', 'guide'],
+      QueryIntent.profileInfo: [
+        'my profile',
+        'account info',
+        'profile details',
+      ],
     };
 
-    int maxScore = 0;
+    int best = -1;
     QueryIntent bestIntent = QueryIntent.unknown;
-
-    intentPatterns.forEach((intent, patterns) {
-      for (final pattern in patterns) {
-        final score = _levenshteinDistance(query, pattern);
-        if (score > maxScore) {
-          maxScore = score;
-          bestIntent = intent;
+    for (final entry in intentPatterns.entries) {
+      for (final pattern in entry.value) {
+        final score = _similarityScore(q, pattern);
+        if (score > best) {
+          best = score;
+          bestIntent = entry.key;
         }
       }
-    });
-
-    if (maxScore > query.length * 0.4) {
-      print(
-        'Fuzzy matched to: $bestIntent with score $maxScore',
-      );
+    }
+    if (best >= 65) {
+      print('Fuzzy matched: $bestIntent (score $best)');
       return bestIntent;
     }
-
-    print('No match found, falling back to unknown');
     return QueryIntent.unknown;
   }
 
-  static int _levenshteinDistance(String s, String t) {
-    if (s == t) return 100;
-    if (s.isEmpty || t.isEmpty) return 0;
-
-    final m = s.length;
-    final n = t.length;
-    final dp = List.generate(
-      m + 1,
-      (_) => List<int>.filled(n + 1, 0),
-    );
-
-    for (int i = 0; i <= m; i++) {
-      dp[i][0] = i;
-    }
-    for (int j = 0; j <= n; j++) {
-      dp[0][j] = j;
-    }
-
-    for (int i = 1; i <= m; i++) {
-      for (int j = 1; j <= n; j++) {
-        final cost = s[i - 1] == t[j - 1] ? 0 : 1;
-        dp[i][j] = min(
-          dp[i - 1][j] + 1,
-          min(dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost),
-        );
-      }
-    }
-
-    return 100 - (dp[m][n] * 100 ~/ (m + n));
-  }
-
-  static bool _fuzzyContains(
-    String query,
-    List<String> patterns,
-  ) {
-    for (final pattern in patterns) {
-      if (_levenshteinDistance(query, pattern) > 40) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  static bool _containsCategoryNames(String query) {
-    final categories = [
-      'food',
-      'transport',
-      'travel',
-      'entertainment',
-      'shopping',
-      'bills',
-      'health',
-      'education',
-      'groceries',
-      'restaurant',
-      'fuel',
-      'rent',
-      'utilities',
-      'clothing',
-      'electronics',
-      'sports',
-      'beauty',
-      'gifts',
-      'investment',
-      'subscription',
-    ];
-    return categories.any(
-      (category) => query.contains(category),
-    );
-  }
-
-  static String? extractCategoryFromQuery(String query) {
-    final categoryMap = {
-      'food': [
-        'food',
-        'dining',
-        'restaurant',
-        'meal',
-        'lunch',
-        'dinner',
-        'breakfast',
-        'eat',
-        'hungry',
-      ],
-      'groceries': [
-        'groceries',
-        'grocery',
-        'supermarket',
-        'vegetables',
-        'fruits',
-        'shopping',
-      ],
-      'transport': [
-        'transport',
-        'transportation',
-        'travel',
-        'commute',
-        'bus',
-        'train',
-        'car',
-      ],
-      'fuel': ['fuel', 'gas', 'petrol', 'diesel'],
-      'bills': [
-        'bills',
-        'utilities',
-        'electricity',
-        'water',
-        'internet',
-        'phone',
-        'payment',
-      ],
-      'rent': [
-        'rent',
-        'mortgage',
-        'housing',
-        'apartment',
-        'house',
-      ],
-      'shopping': [
-        'shopping',
-        'clothes',
-        'clothing',
-        'fashion',
-        'accessories',
-        'buy',
-      ],
-      'entertainment': [
-        'entertainment',
-        'movie',
-        'cinema',
-        'game',
-        'fun',
-        'leisure',
-      ],
-      'health': [
-        'health',
-        'medical',
-        'doctor',
-        'pharmacy',
-        'medicine',
-        'hospital',
-      ],
-      'education': [
-        'education',
-        'course',
-        'book',
-        'learning',
-        'school',
-        'study',
-      ],
-      'fitness': [
-        'fitness',
-        'gym',
-        'sports',
-        'exercise',
-        'workout',
-      ],
-      'beauty': [
-        'beauty',
-        'cosmetics',
-        'salon',
-        'personal care',
-        'hair',
-      ],
-    };
-
-    final lowerQuery = query.toLowerCase();
-
-    for (final entry in categoryMap.entries) {
-      if (entry.value.any(
-        (keyword) => lowerQuery.contains(keyword),
-      )) {
-        return entry.key;
-      }
-    }
-
-    return null;
-  }
-
+  // --- Helpers used by response_generator.dart
   static String? extractSearchTerm(String query) {
-    final searchPatterns = [
+    // Supports: "search for X", "find X", "look for X", "show me X",
+    // "expenses with X", "transactions containing X"
+    final regs = [
       RegExp(r'search for (.+)', caseSensitive: false),
       RegExp(r'find (.+)', caseSensitive: false),
       RegExp(r'look for (.+)', caseSensitive: false),
@@ -817,14 +501,46 @@ class QueryClassifier {
         caseSensitive: false,
       ),
     ];
-
-    for (final pattern in searchPatterns) {
-      final match = pattern.firstMatch(query);
-      if (match != null && match.group(1) != null) {
-        return match.group(1)!.trim();
+    final q = query.trim();
+    for (final r in regs) {
+      final m = r.firstMatch(q);
+      if (m != null && m.group(1) != null) {
+        return m.group(1)!.trim();
       }
     }
-
     return null;
+  }
+
+  // Levenshtein-based similarity -> 0..100
+  static int _similarityScore(String s, String t) {
+    if (s == t) return 100;
+    if (s.isEmpty || t.isEmpty) return 0;
+    final m = s.length, n = t.length;
+    final dp = List.generate(
+      m + 1,
+      (_) => List<int>.filled(n + 1, 0),
+    );
+    for (int i = 0; i <= m; i++) dp[i][0] = i;
+    for (int j = 0; j <= n; j++) dp[0][j] = j;
+    for (int i = 1; i <= m; i++) {
+      for (int j = 1; j <= n; j++) {
+        final cost =
+            s.codeUnitAt(i - 1) == t.codeUnitAt(j - 1)
+                ? 0
+                : 1;
+        dp[i][j] = min(
+          dp[i - 1][j] + 1,
+          min(dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost),
+        );
+      }
+    }
+    return 100 - (dp[m][n] * 100 ~/ (m + n));
+  }
+
+  static bool _containsAny(
+    String text,
+    List<String> patterns,
+  ) {
+    return patterns.any((p) => text.contains(p));
   }
 }

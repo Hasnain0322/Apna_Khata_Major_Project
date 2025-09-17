@@ -1,5 +1,4 @@
 // lib/services/chatbot_service.dart
-
 import 'package:expense_tracker/models/expense_model.dart';
 import 'package:expense_tracker/models/user_profile_model.dart';
 import 'package:expense_tracker/services/firestore_service.dart';
@@ -22,9 +21,7 @@ class ChatbotService {
 
       final expenses =
           await _firestoreService.getExpensesStream().first;
-
-      UserProfile? userProfile;
-      userProfile =
+      final userProfile =
           await _firestoreService.getUserProfile().first;
 
       return ResponseGenerator.generateResponse(
@@ -37,7 +34,7 @@ class ChatbotService {
       print('Error in processQuery: $e');
       return ResponseGenerator.generateResponse(
         QueryIntent.unknown,
-        [],
+        const <Expense>[],
         null,
         userQuery,
       );
@@ -47,34 +44,39 @@ class ChatbotService {
   List<QuickAction> getSuggestedQueries() {
     return [
       QuickAction(
-        label: 'How much did I spend this month?',
+        label: 'Monthly spending',
         type: QuickActionType.query,
         data: 'How much did I spend this month?',
       ),
       QuickAction(
-        label: 'Show my recent expenses',
+        label: 'Recent expenses',
         type: QuickActionType.query,
         data: 'Show my recent expenses',
       ),
       QuickAction(
-        label: 'Give me smart insights',
+        label: 'Budget analysis',
         type: QuickActionType.query,
-        data: 'Show my insights',
+        data: 'Analyze my budget',
       ),
       QuickAction(
-        label: 'How to add an expense?',
+        label: 'Forecast spending',
         type: QuickActionType.query,
-        data: 'How to add an expense?',
+        data: 'Forecast my spending',
       ),
       QuickAction(
-        label: 'Give me spending tips',
+        label: 'Subscriptions',
         type: QuickActionType.query,
-        data: 'Give me spending tips',
+        data: 'Show my subscriptions',
       ),
       QuickAction(
-        label: 'Analyze my budget',
+        label: 'Average per day',
         type: QuickActionType.query,
-        data: 'analyze my budget',
+        data: 'What is my average per day?',
+      ),
+      QuickAction(
+        label: 'Open Reports',
+        type: QuickActionType.navigation,
+        data: 'reports',
       ),
     ];
   }
@@ -115,17 +117,16 @@ class ChatbotService {
       expenses,
     );
 
-    String message = 'Hi $userName! 👋\n\n';
+    String msg = 'Hi $userName! 👋\n\n';
     if (insights.isNotEmpty) {
-      final topInsight = insights.first;
-      message +=
-          '${topInsight.title}\n${topInsight.message}\n\n';
+      final first = insights.first;
+      msg += '${first.title}\n${first.message}\n\n';
     }
-    message +=
-        'I can help with spending summaries, reports, and tips.';
+    msg +=
+        'Ask for a spending summary, a budget analysis, subscriptions, or a forecast.';
 
     return ChatResponse(
-      message: message,
+      message: msg,
       quickActions: getSuggestedQueries(),
     );
   }

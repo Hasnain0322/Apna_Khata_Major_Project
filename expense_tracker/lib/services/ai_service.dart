@@ -11,7 +11,7 @@ class AiService {
   // IMPORTANT: This is the IP address where your Python Flask server is running.
   // You must update this value every time your computer's local IP address changes.
   final String _baseUrl =
-      'http://192.168.0.104:5000'; // <-- UPDATE AS NEEDED
+      'http://192.168.31.169:5000'; // <-- UPDATE AS NEEDED
 
   /// Sends a simple text string to the backend for analysis.
   /// Used for both manual text entry and transcribed voice input.
